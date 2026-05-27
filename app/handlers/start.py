@@ -1,40 +1,31 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-HELP_TEXT = """
-🤖 *RDG — Random Dinner Generator*
+HELP_TEXT = """*RDG - Random Dinner Generator*
 
 Genera un menu settimanale casuale per ridurre la fatica decisionale.
 
-*Comandi Menu:*
-
-/roll - Genera un nuovo menu settimanale
+*MENU*
+/roll - Genera nuovo menu settimanale
 /reroll <categoria|numero> - Rigenera piatti
-  • /reroll pesce - Rigenera il piatto di pesce
-  • /reroll 3 - Rigenera il piatto alla posizione 3
-/accept - Accetta il menu e salvalo in storia
-/history - Vedi i menu accettati
+/accept - Accetta menu e salvalo
+/history - Vedi menu accettati
 
-*Comandi Ricette:*
+*RICETTE*
+/list [categoria] - Vedi ricette
+/add - Aggiungi ricetta
 
-/list [categoria] - Vedi tutte le ricette o filtra per categoria
-/add - Aggiungi una nuova ricetta
+*INGREDIENTI ESTERNI*
+/external <N> ing1, ing2 - Marca ingredienti da comprare altrove
+/noexternal <N> - Nessun ingrediente esterno
+/fill_missing - Mostra ricette mancanti
+/skip - Ignora richiesta ingredienti
 
-*Comandi Ingredienti Esterni:*
-
-/external <N> ing1, ing2 - Marca ingredienti da acquistare altrove
-  • /external 1 salmone fresco, aneto
-/noexternal <N> - Marca ricetta senza ingredienti esterni
-  • /noexternal 2
-/fill_missing - Mostra ricette con ingredienti ancora sconosciuti
-/skip - Ignora la richiesta di ingredienti esterni
-
-*Uso rapido:*
-1️⃣ /roll
-2️⃣ /reroll <cosa ti piace cambiare>
-3️⃣ /accept
-4️⃣ /external o /skip (se chiesto)
-Done! 🎉
+*WORKFLOW*
+1. /roll
+2. /reroll <cosa cambiare>
+3. /accept
+4. /external o /skip (se chiesto)
 """
 
 
