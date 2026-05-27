@@ -91,3 +91,23 @@ def format_recipe(recipe: Recipe) -> str:
     if recipe.needs_side:
         text += f"Contorno: {recipe.suggested_side or 'a scelta'}\n"
     return text
+
+
+def format_enrichment_prompt(recipes: list[Recipe]) -> str:
+    """Format enrichment prompt showing recipes that need external ingredient info."""
+    if not recipes:
+        return "No recipes need enrichment."
+
+    lines = ["🛒 *External ingredient information missing*\n"]
+    lines.append("I still don't know whether these recipes require ingredients purchased outside the online supermarket:\n")
+
+    for i, recipe in enumerate(recipes, 1):
+        lines.append(f"{i}. {recipe.name}")
+
+    lines.append("")
+    lines.append("Reply with:")
+    lines.append("• `/external 1 salmon fillet, dill`")
+    lines.append("• `/noexternal 2`")
+    lines.append("• `/skip`")
+
+    return "\n".join(lines)

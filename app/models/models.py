@@ -20,11 +20,14 @@ class Recipe(Base):
     last_used = Column(DateTime, nullable=True)
     rating = Column(Integer, nullable=True)  # 1-5
 
+    external_status = Column(String, default="unknown")  # unknown | none | defined
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationship
+    # Relationships
     menu_items = relationship("WeeklyMenuItem", back_populates="recipe", cascade="all, delete-orphan")
+    external_ingredients = relationship("ExternalIngredient", back_populates="recipe", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"Recipe(id={self.id}, name='{self.name}', category='{self.category}')"
@@ -68,3 +71,17 @@ class WeeklyMenuItem(Base):
 
     def __repr__(self):
         return f"WeeklyMenuItem(menu_id={self.menu_id}, position={self.position}, recipe_id={self.recipe_id})"
+
+
+class ExternalIngredient(Base):
+    __tablename__ = "external_ingredients"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False, index=True)
+    ingredient_name = Column(String, nullable=False)
+
+    # Relationship
+    recipe = relationship("Recipe", back_populates="external_ingredients")
+
+    def __repr__(self):
+        return f"ExternalIngredient(recipe_id={self.recipe_id}, ingredient='{self.ingredient_name}')"

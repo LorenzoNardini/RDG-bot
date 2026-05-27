@@ -2,7 +2,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from app.database.db import get_session
 from app.services.menu_service import MenuService
-from app.utils.formatting import format_menu
+from app.services.external_service import ExternalIngredientService
+from app.utils.formatting import format_menu, format_enrichment_prompt
 
 
 async def accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -48,6 +49,20 @@ async def accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         menu_text += "\n\n✅ *Menu accettato e salvato in storia!*"
 
         await update.message.reply_text(menu_text, parse_mode="Markdown")
+
+        # Check for recipes needing external ingredient enrichment
+        recipe_ids = [item.recipe_id for item in items]
+        external_service = ExternalIngredientService(session)
+        unknown_recipes = external_service.get_recipes_needing_enrichment(recipe_ids)
+
+        if unknown_recipes:
+            # Build numbered mapping
+            enrichment_recipes = {i: recipe.id for i, recipe in enumerate(unknown_recipes, 1)}
+            context.user_data["enrichment_recipes"] = enrichment_recipes
+
+            # Show enrichment prompt
+            prompt = format_enrichment_prompt(unknown_recipes)
+            await update.message.reply_text(prompt, parse_mode="Markdown")
 
     finally:
         session.close()
