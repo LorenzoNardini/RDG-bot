@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -6,7 +7,7 @@ from telegram.ext import (
     filters,
 )
 from config import BOT_TOKEN
-from app.database.db import init_db
+from app.database.db import init_db, get_session
 from app.handlers.start import start, help_command
 from app.handlers.roll import roll
 from app.handlers.reroll import reroll
@@ -23,11 +24,64 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _seed_recipes_from_excel(excel_path: str, recipe_service):
+    """Seed recipes from Excel file."""
+    import openpyxl
+    try:
+        wb = openpyxl.load_workbook(excel_path)
+        ws = wb["Ricette"]
+
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not row[0]:
+                continue
+
+            name = row[0].strip() if row[0] else None
+            category = row[1].strip().lower() if row[1] else None
+            needs_side_text = row[2] if row[2] else "No"
+            side = row[7].strip() if len(row) > 7 and row[7] else None
+
+            if not name or not category:
+                continue
+
+            needs_side = needs_side_text.lower() in ["sì", "yes", "s", "true"]
+
+            if not recipe_service.get_by_name(name):
+                recipe_service.create(
+                    name=name,
+                    category=category,
+                    needs_side=needs_side,
+                    suggested_side=side
+                )
+    except Exception as e:
+        logger.error(f"Error seeding recipes: {e}")
+
+
 def main():
     """Run the bot."""
     # Initialize database
     init_db()
     logger.info("Database initialized.")
+
+    # Auto-seed database on first startup if empty
+    from app.services.recipe_service import RecipeService
+    session = get_session()
+    try:
+        recipe_service = RecipeService(session)
+        recipe_count = recipe_service.count_all()
+        if recipe_count == 0:
+            logger.info("Database is empty. Running seed script...")
+            from pathlib import Path
+            import openpyxl
+            excel_path = Path(__file__).parent / "RDG.xlsx"
+            if excel_path.exists():
+                _seed_recipes_from_excel(str(excel_path), recipe_service)
+                logger.info("Database seeded successfully.")
+            else:
+                logger.warning("RDG.xlsx not found. Skipping auto-seed.")
+        else:
+            logger.info(f"Database already has {recipe_count} recipes.")
+    finally:
+        session.close()
 
     # Create the Application
     app = Application.builder().token(BOT_TOKEN).build()
