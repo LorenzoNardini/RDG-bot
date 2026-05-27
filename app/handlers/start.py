@@ -6,22 +6,35 @@ HELP_TEXT = """
 
 Genera un menu settimanale casuale per ridurre la fatica decisionale.
 
-*Comandi:*
+*Comandi Menu:*
 
 /roll - Genera un nuovo menu settimanale
 /reroll <categoria|numero> - Rigenera piatti
   • /reroll pesce - Rigenera il piatto di pesce
   • /reroll 3 - Rigenera il piatto alla posizione 3
 /accept - Accetta il menu e salvalo in storia
+/history - Vedi i menu accettati
+
+*Comandi Ricette:*
+
 /list [categoria] - Vedi tutte le ricette o filtra per categoria
 /add - Aggiungi una nuova ricetta
-/history - Vedi i menu accettati
+
+*Comandi Ingredienti Esterni:*
+
+/external <N> ing1, ing2 - Marca ingredienti da acquistare altrove
+  • /external 1 salmone fresco, aneto
+/noexternal <N> - Marca ricetta senza ingredienti esterni
+  • /noexternal 2
+/fill_missing - Mostra ricette con ingredienti ancora sconosciuti
+/skip - Ignora la richiesta di ingredienti esterni
 
 *Uso rapido:*
 1️⃣ /roll
 2️⃣ /reroll <cosa ti piace cambiare>
 3️⃣ /accept
-Done!
+4️⃣ /external o /skip (se chiesto)
+Done! 🎉
 """
 
 
