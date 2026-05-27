@@ -1,27 +1,27 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-HELP_TEXT = """*RDG - Random Dinner Generator*
+HELP_TEXT = """RDG - Random Dinner Generator
 
 Genera un menu settimanale casuale per ridurre la fatica decisionale.
 
-*MENU*
+MENU:
 /roll - Genera nuovo menu settimanale
-/reroll <categoria|numero> - Rigenera piatti
+/reroll - Rigenera piatti (es: /reroll 3)
 /accept - Accetta menu e salvalo
 /history - Vedi menu accettati
 
-*RICETTE*
-/list [categoria] - Vedi ricette
+RICETTE:
+/list - Vedi ricette
 /add - Aggiungi ricetta
 
-*INGREDIENTI ESTERNI*
-/external <N> ing1, ing2 - Marca ingredienti da comprare altrove
-/noexternal <N> - Nessun ingrediente esterno
+INGREDIENTI ESTERNI:
+/external - Marca ingredienti da comprare altrove (es: /external 1 salmone, aneto)
+/noexternal - Nessun ingrediente esterno (es: /noexternal 2)
 /fill_missing - Mostra ricette mancanti
 /skip - Ignora richiesta ingredienti
 
-*WORKFLOW*
+WORKFLOW:
 1. /roll
 2. /reroll <cosa cambiare>
 3. /accept
@@ -31,12 +31,9 @@ Genera un menu settimanale casuale per ridurre la fatica decisionale.
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
-    await update.message.reply_text(
-        f"Ciao! 👋\n\n{HELP_TEXT}",
-        parse_mode="Markdown"
-    )
+    await update.message.reply_text(HELP_TEXT)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help command."""
-    await update.message.reply_text(HELP_TEXT, parse_mode="Markdown")
+    await update.message.reply_text(HELP_TEXT)
