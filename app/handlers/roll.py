@@ -1,0 +1,39 @@
+from telegram import Update
+from telegram.ext import ContextTypes
+from app.database.db import get_session
+from app.services.menu_service import MenuService
+from app.utils.formatting import format_menu
+
+
+async def roll(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /roll command - generate a new weekly menu."""
+    session = get_session()
+    try:
+        menu_service = MenuService(session)
+        menu = menu_service.generate_week()
+
+        if not menu:
+            await update.message.reply_text(
+                "❌ Cannot generate menu. Check that all categories have recipes.",
+                parse_mode="Markdown"
+            )
+            return
+
+        # Store pending menu ID in context (per user)
+        user_id = update.effective_user.id
+        context.user_data["pending_menu_id"] = menu.id
+
+        # Get menu items and format
+        items = menu_service.get_menu_items(menu.id)
+        menu_text = format_menu(menu, items)
+
+        # Add reroll and accept hints
+        menu_text += "\n_Per cambiare piatti:_\n"
+        menu_text += "• /reroll pesce\n"
+        menu_text += "• /reroll 3\n"
+        menu_text += "• /accept quando sei soddisfatto"
+
+        await update.message.reply_text(menu_text, parse_mode="Markdown")
+
+    finally:
+        session.close()
