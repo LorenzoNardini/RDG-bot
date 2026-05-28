@@ -41,8 +41,13 @@ async def external_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         recipe_id = enrichment_recipes[position]
 
-        # Parse ingredients (everything after the position)
-        ingredients_text = " ".join(context.args[1:])
+        # Parse ingredients (stop at next slash command)
+        ingredients_tokens = []
+        for arg in context.args[1:]:
+            if arg.startswith("/"):
+                break
+            ingredients_tokens.append(arg)
+        ingredients_text = " ".join(ingredients_tokens)
         ingredients = [ing.strip() for ing in ingredients_text.split(",") if ing.strip()]
 
         if not ingredients:

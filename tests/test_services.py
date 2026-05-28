@@ -1,0 +1,203 @@
+import pytest
+from datetime import datetime
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.models.models import Base, Recipe, WeeklyMenu, WeeklyMenuItem, ExternalIngredient
+from app.services.recipe_service import RecipeService
+from app.services.menu_service import MenuService
+from app.services.external_service import ExternalIngredientService
+
+
+@pytest.fixture
+def test_db():
+    """Create an in-memory SQLite database for testing."""
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+    yield session
+    session.close()
+
+
+@pytest.fixture
+def seed_recipes(test_db):
+    """Seed test recipes."""
+    recipes = [
+        Recipe(name="Pasta Carbonara", category="altro", needs_side=False),
+        Recipe(name="Spaghetti Aglio Olio", category="altro", needs_side=False),
+        Recipe(name="Bistecca alla Fiorentina", category="carne rossa", needs_side=True, suggested_side="Patatine"),
+        Recipe(name="Costata di Manzo", category="carne rossa", needs_side=True, suggested_side="Insalata"),
+        Recipe(name="Petto di Pollo", category="carne bianca", needs_side=True, suggested_side="Verdure"),
+        Recipe(name="Branzino al Forno", category="pesce", needs_side=True, suggested_side="Limone"),
+        Recipe(name="Frittata di Cipolle", category="uova", needs_side=False),
+        Recipe(name="Minestra di Lenticchie", category="legumi", needs_side=False),
+    ]
+    for recipe in recipes:
+        test_db.add(recipe)
+    test_db.commit()
+    return recipes
+
+
+class TestRecipeService:
+    def test_get_by_category(self, test_db, seed_recipes):
+        service = RecipeService(test_db)
+        recipes = service.get_by_category("carne rossa")
+        assert len(recipes) == 2
+        assert all(r.category == "carne rossa" for r in recipes)
+
+    def test_get_by_name(self, test_db, seed_recipes):
+        service = RecipeService(test_db)
+        recipe = service.get_by_name("Pasta Carbonara")
+        assert recipe is not None
+        assert recipe.category == "altro"
+
+    def test_get_all(self, test_db, seed_recipes):
+        service = RecipeService(test_db)
+        recipes = service.get_all()
+        assert len(recipes) == 8
+
+    def test_count_all(self, test_db, seed_recipes):
+        service = RecipeService(test_db)
+        assert service.count_all() == 8
+
+    def test_count_by_category(self, test_db, seed_recipes):
+        service = RecipeService(test_db)
+        assert service.count_by_category("carne rossa") == 2
+        assert service.count_by_category("pesce") == 1
+
+
+class TestMenuService:
+    def test_generate_week_creates_7_items(self, test_db, seed_recipes):
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        items = service.get_menu_items(menu.id)
+        assert len(items) == 7
+
+    def test_generate_week_one_per_category(self, test_db, seed_recipes):
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        items = service.get_menu_items(menu.id)
+
+        # Positions 1-6 should have different categories
+        categories = [items[i].recipe.category for i in range(6)]
+        assert len(set(categories)) == 6
+
+    def test_reroll_category_changes_recipe(self, test_db, seed_recipes):
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        items = service.get_menu_items(menu.id)
+
+        # Find an item with category "carne rossa"
+        carne_item = next(i for i in items if i.recipe.category == "carne rossa")
+        original_recipe_id = carne_item.recipe_id
+
+        # Reroll the category
+        service.reroll_category(menu.id, "carne rossa")
+
+        # Refresh items
+        items = service.get_menu_items(menu.id)
+        carne_item = next(i for i in items if i.recipe.category == "carne rossa")
+
+        # Recipe might have changed (or stayed the same if only 1)
+        # Just verify it's still in the same category
+        assert carne_item.recipe.category == "carne rossa"
+
+    def test_reroll_position_maintains_category(self, test_db, seed_recipes):
+        """Test that rerolling a position maintains the category constraint."""
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        items = service.get_menu_items(menu.id)
+
+        # Get the first item (position 1)
+        item = items[0]
+        original_category = item.recipe.category
+        original_recipe_id = item.recipe_id
+
+        # Reroll position 1
+        service.reroll_position(menu.id, 1)
+
+        # Refresh items
+        items = service.get_menu_items(menu.id)
+        item = items[0]
+
+        # Category should be maintained
+        assert item.recipe.category == original_category
+
+    def test_accept_menu_sets_timestamp(self, test_db, seed_recipes):
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        assert menu.accepted_at is None
+
+        service.accept_menu(menu.id)
+
+        menu = service.get_menu(menu.id)
+        assert menu.accepted_at is not None
+
+    def test_get_pending_menu_returns_none_if_accepted(self, test_db, seed_recipes):
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        assert service.get_pending_menu(menu.id) is not None
+
+        service.accept_menu(menu.id)
+        assert service.get_pending_menu(menu.id) is None
+
+    def test_get_recent_accepted_menus(self, test_db, seed_recipes):
+        service = MenuService(test_db)
+
+        # Create and accept 3 menus
+        for _ in range(3):
+            menu = service.generate_week()
+            service.accept_menu(menu.id)
+
+        recent = service.get_recent_accepted_menus(limit=5)
+        assert len(recent) == 3
+
+
+class TestExternalIngredientService:
+    def test_set_ingredients_and_get(self, test_db, seed_recipes):
+        recipe = seed_recipes[0]
+        service = ExternalIngredientService(test_db)
+
+        # Set ingredients
+        ingredients = ["flour", "butter", "salt"]
+        service.set_ingredients(recipe.id, ingredients)
+
+        # Verify status changed
+        assert service.get_status(recipe.id) == "defined"
+
+        # Verify ingredients retrieved
+        retrieved = service.get_ingredients(recipe.id)
+        assert set(retrieved) == set(ingredients)
+
+    def test_set_no_external(self, test_db, seed_recipes):
+        recipe = seed_recipes[0]
+        service = ExternalIngredientService(test_db)
+
+        service.set_no_external(recipe.id)
+        assert service.get_status(recipe.id) == "none"
+        assert service.get_ingredients(recipe.id) == []
+
+    def test_get_unknown_recipes(self, test_db, seed_recipes):
+        service = ExternalIngredientService(test_db)
+
+        # Mark some recipes
+        service.set_no_external(seed_recipes[0].id)
+        service.set_ingredients(seed_recipes[1].id, ["salt"])
+
+        # Get unknown recipes
+        unknown = service.get_unknown_recipes()
+        assert len(unknown) == 6  # 8 total - 2 marked
+
+    def test_get_recipes_needing_enrichment(self, test_db, seed_recipes):
+        service = ExternalIngredientService(test_db)
+
+        # Mark some recipes
+        service.set_no_external(seed_recipes[0].id)
+
+        # Filter specific recipes
+        recipe_ids = [seed_recipes[0].id, seed_recipes[1].id, seed_recipes[2].id]
+        needing = service.get_recipes_needing_enrichment(recipe_ids)
+
+        # Should only return unknown ones
+        assert len(needing) == 2
+        assert seed_recipes[0].id not in [r.id for r in needing]

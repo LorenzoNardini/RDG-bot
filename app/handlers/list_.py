@@ -19,7 +19,7 @@ async def list_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Check if category filter is provided
         if context.args:
-            category = context.args[0].lower()
+            category = " ".join(context.args).lower()
             if category not in CATEGORIES:
                 await update.message.reply_text(
                     f"❌ Invalid category: {category}\n"
