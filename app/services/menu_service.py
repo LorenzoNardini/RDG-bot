@@ -115,7 +115,8 @@ class MenuService:
     def reroll_position(self, menu_id: int, position: int) -> bool:
         """
         Reroll the meal at a given position.
-        Maintains the same category constraint, avoiding current selections.
+        - Positions 1-6: maintain category constraint (fixed per category)
+        - Position 7: can pick any category (wild card slot)
         """
         # Get current menu
         menu = self.get_menu(menu_id)
@@ -130,18 +131,23 @@ class MenuService:
         if not item:
             return False
 
-        # Get the original category
-        original_category = item.recipe.category
-
         # Get current selected recipes (excluding this item)
         current_items = self.get_menu_items(menu_id)
         selected_recipe_ids = {i.recipe_id for i in current_items if i.position != position}
 
-        # Get available recipes from the same category
-        category_recipes = self.recipe_service.get_by_category(original_category)
-        available = [r for r in category_recipes if r.id not in selected_recipe_ids]
-        if not available:
-            available = category_recipes
+        if position <= 6:
+            # Positions 1-6: maintain the original category
+            original_category = item.recipe.category
+            category_recipes = self.recipe_service.get_by_category(original_category)
+            available = [r for r in category_recipes if r.id not in selected_recipe_ids]
+            if not available:
+                available = category_recipes
+        else:
+            # Position 7: pick from any category
+            all_recipes = self.recipe_service.get_all()
+            available = [r for r in all_recipes if r.id not in selected_recipe_ids]
+            if not available:
+                available = all_recipes
 
         # Replace with new recipe
         new_recipe = random.choice(available)

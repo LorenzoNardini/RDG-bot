@@ -103,12 +103,12 @@ class TestMenuService:
         assert carne_item.recipe.category == "carne rossa"
 
     def test_reroll_position_maintains_category(self, test_db, seed_recipes):
-        """Test that rerolling a position maintains the category constraint."""
+        """Test that rerolling positions 1-6 maintains the category constraint."""
         service = MenuService(test_db)
         menu = service.generate_week()
         items = service.get_menu_items(menu.id)
 
-        # Get the first item (position 1)
+        # Get the first item (position 1, should be "carne rossa")
         item = items[0]
         original_category = item.recipe.category
         original_recipe_id = item.recipe_id
@@ -122,6 +122,30 @@ class TestMenuService:
 
         # Category should be maintained
         assert item.recipe.category == original_category
+
+    def test_reroll_position_7_any_category(self, test_db, seed_recipes):
+        """Test that rerolling position 7 can pick any category."""
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        items = service.get_menu_items(menu.id)
+
+        # Get position 7 (wild card slot)
+        item = items[6]
+        assert item.position == 7
+
+        # Reroll position 7 multiple times and check it can be different categories
+        original_category = item.recipe.category
+        categories_seen = {original_category}
+
+        for _ in range(5):
+            service.reroll_position(menu.id, 7)
+            items = service.get_menu_items(menu.id)
+            item = items[6]
+            categories_seen.add(item.recipe.category)
+
+        # Position 7 should be able to have different categories
+        # (may still have same category by chance, but at least one different is likely)
+        assert len(categories_seen) > 1
 
     def test_accept_menu_sets_timestamp(self, test_db, seed_recipes):
         service = MenuService(test_db)
