@@ -32,9 +32,18 @@ async def external_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Get enrichment recipes mapping
         enrichment_recipes = context.user_data.get("enrichment_recipes", {})
-        if position not in enrichment_recipes:
+        if not enrichment_recipes:
             await update.message.reply_text(
-                f"Position {position} not found in current enrichment. Use /fill_missing to see all.",
+                "No enrichment session active. Run /fill_missing first.",
+                parse_mode="Markdown"
+            )
+            return
+        if position not in enrichment_recipes:
+            available = ", ".join(str(p) for p in sorted(enrichment_recipes.keys()))
+            await update.message.reply_text(
+                f"Position {position} not in current enrichment.\n"
+                f"Available: {available}\n"
+                f"Or run /fill_missing again.",
                 parse_mode="Markdown"
             )
             return
@@ -112,9 +121,18 @@ async def noexternal_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Get enrichment recipes mapping
         enrichment_recipes = context.user_data.get("enrichment_recipes", {})
-        if position not in enrichment_recipes:
+        if not enrichment_recipes:
             await update.message.reply_text(
-                f"Position {position} not found in current enrichment.",
+                "No enrichment session active. Run /fill_missing first.",
+                parse_mode="Markdown"
+            )
+            return
+        if position not in enrichment_recipes:
+            available = ", ".join(str(p) for p in sorted(enrichment_recipes.keys()))
+            await update.message.reply_text(
+                f"Position {position} not in current enrichment.\n"
+                f"Available: {available}\n"
+                f"Or run /fill_missing again.",
                 parse_mode="Markdown"
             )
             return
