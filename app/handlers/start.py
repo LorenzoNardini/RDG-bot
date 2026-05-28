@@ -13,6 +13,7 @@ MENU:
 
 RICETTE:
 /list - Vedi ricette
+/ingredients - Vedi ricette con ingredienti esterni
 /add - Aggiungi ricetta
 
 INGREDIENTI ESTERNI:

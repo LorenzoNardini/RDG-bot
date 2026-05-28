@@ -50,7 +50,7 @@ def format_menu(menu: WeeklyMenu, items: list[WeeklyMenuItem]) -> str:
     return "\n".join(lines)
 
 
-def format_recipe_list(recipes: list[Recipe]) -> str:
+def format_recipe_list(recipes: list[Recipe], show_external: bool = False) -> str:
     """Format a list of recipes for Telegram."""
     if not recipes:
         return "No recipes found."
@@ -78,6 +78,13 @@ def format_recipe_list(recipes: list[Recipe]) -> str:
             if recipe.needs_side and recipe.suggested_side:
                 side_note = f" (+ {recipe.suggested_side})"
             lines.append(f"  • {recipe.name}{side_note}")
+
+            if show_external:
+                if recipe.external_status == "defined" and recipe.external_ingredients:
+                    ing_list = ", ".join([ing.ingredient_name for ing in recipe.external_ingredients])
+                    lines.append(f"    🛒 {ing_list}")
+                elif recipe.external_status == "none":
+                    lines.append(f"    ✅ No external ingredients needed")
 
         lines.append("")
 

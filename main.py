@@ -17,6 +17,7 @@ from app.handlers.history import history
 from app.handlers.add import get_add_handler
 from app.handlers.external import external_cmd, noexternal_cmd, skip_cmd
 from app.handlers.fill_missing import fill_missing
+from app.handlers.ingredients import ingredients_cmd
 
 # Set up logging
 logging.basicConfig(
@@ -100,6 +101,7 @@ def main():
     app.add_handler(CommandHandler("noexternal", noexternal_cmd))
     app.add_handler(CommandHandler("skip", skip_cmd))
     app.add_handler(CommandHandler("fill_missing", fill_missing))
+    app.add_handler(CommandHandler("ingredients", ingredients_cmd))
 
     # Register conversation handler for /add
     app.add_handler(get_add_handler())
