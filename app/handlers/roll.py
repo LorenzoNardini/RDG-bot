@@ -29,8 +29,9 @@ async def roll(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Add reroll and accept hints
         menu_text += "\n_Per cambiare piatti:_\n"
-        menu_text += "• /reroll pesce\n"
-        menu_text += "• /reroll 3\n"
+        menu_text += "• /reroll pesce (categoria)\n"
+        menu_text += "• /reroll 3 (posizione singola)\n"
+        menu_text += "• /reroll 1 2 4 (posizioni multiple)\n"
         menu_text += "• /accept quando sei soddisfatto"
 
         await update.message.reply_text(menu_text, parse_mode="Markdown")

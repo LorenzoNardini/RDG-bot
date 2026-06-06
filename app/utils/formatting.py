@@ -113,8 +113,9 @@ def format_enrichment_prompt(recipes: list[Recipe]) -> str:
 
     lines.append("")
     lines.append("Reply with:")
-    lines.append("• `/external 1 salmon fillet, dill`")
-    lines.append("• `/noexternal 2`")
-    lines.append("• `/skip`")
+    lines.append("• Single: `/external 1 salmon fillet, dill`")
+    lines.append("• Batch: `/external 1 jackfruit; 2 turmeric; 3 salt`")
+    lines.append("• No external: `/noexternal 1 2`")
+    lines.append("• Skip: `/skip`")
 
     return "\n".join(lines)

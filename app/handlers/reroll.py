@@ -38,8 +38,10 @@ async def reroll(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Parse arguments
         if not context.args:
             await update.message.reply_text(
-                "Usage: /reroll <category|position|positions>\n"
-                "Examples: /reroll pesce, /reroll 3, /reroll 1 2 4",
+                "Usage:\n"
+                "• Category: `/reroll pesce`\n"
+                "• Single position: `/reroll 3`\n"
+                "• Multiple: `/reroll 1 2 4` or `/reroll 1, 2, 4`",
                 parse_mode="Markdown"
             )
             return
