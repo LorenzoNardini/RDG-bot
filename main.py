@@ -4,7 +4,6 @@ from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
-    CallbackQueryHandler,
     filters,
 )
 from config import BOT_TOKEN
@@ -19,7 +18,7 @@ from app.handlers.add import get_add_handler
 from app.handlers.external import external_cmd, noexternal_cmd, skip_cmd
 from app.handlers.fill_missing import fill_missing
 from app.handlers.ingredients import ingredients_cmd
-from app.handlers.edit import edit, edit_callback, edit_value
+from app.handlers.edit import get_edit_handler
 
 # Set up logging
 logging.basicConfig(
@@ -104,14 +103,10 @@ def main():
     app.add_handler(CommandHandler("skip", skip_cmd))
     app.add_handler(CommandHandler("fill_missing", fill_missing))
     app.add_handler(CommandHandler("ingredients", ingredients_cmd))
-    app.add_handler(CommandHandler("edit", edit))
 
-    # Register handlers
-    app.add_handler(CallbackQueryHandler(edit_callback, pattern="^edit_"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex("^/"), edit_value))
-
-    # Register conversation handler for /add
+    # Register conversation handlers
     app.add_handler(get_add_handler())
+    app.add_handler(get_edit_handler())
 
     # Start the bot
     logger.info("Starting bot...")
