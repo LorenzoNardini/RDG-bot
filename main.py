@@ -18,7 +18,7 @@ from app.handlers.add import get_add_handler
 from app.handlers.external import external_cmd, noexternal_cmd, skip_cmd
 from app.handlers.fill_missing import fill_missing
 from app.handlers.ingredients import ingredients_cmd
-from app.handlers.edit import edit_start, get_edit_handler
+from app.handlers.edit import get_edit_handler
 
 # Set up logging
 logging.basicConfig(
@@ -103,7 +103,6 @@ def main():
     app.add_handler(CommandHandler("skip", skip_cmd))
     app.add_handler(CommandHandler("fill_missing", fill_missing))
     app.add_handler(CommandHandler("ingredients", ingredients_cmd))
-    app.add_handler(CommandHandler("edit", edit_start))
 
     # Register conversation handlers
     app.add_handler(get_add_handler())

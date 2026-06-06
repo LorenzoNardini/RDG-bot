@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, CommandHandler, filters
 from app.database.db import get_session
 from app.services.recipe_service import RecipeService
 from app.services.external_service import ExternalIngredientService
@@ -31,6 +31,7 @@ async def edit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Store recipe in context
         context.user_data["edit_recipe_id"] = recipe.id
         context.user_data["edit_recipe_name"] = recipe.name
+        context.user_data["edit_session"] = session
 
         # Show edit options
         keyboard = [
@@ -51,8 +52,12 @@ async def edit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return CHOOSE_FIELD
 
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+        return ConversationHandler.END
     finally:
-        session.close()
+        if session:
+            session.close()
 
 
 async def handle_field_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -159,10 +164,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def get_edit_handler():
     """Return ConversationHandler for /edit command."""
     return ConversationHandler(
-        entry_points=[],
+        entry_points=[CommandHandler("edit", edit_start)],
         states={
             CHOOSE_FIELD: [CallbackQueryHandler(handle_field_choice)],
             ENTER_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_value_entry)],
         },
-        fallbacks=[MessageHandler(filters.COMMAND, cancel)],
+        fallbacks=[CommandHandler("cancel", cancel)],
     )
