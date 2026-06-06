@@ -35,23 +35,19 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             text += menu_text
 
-            # Add external ingredients for this menu
-            text += "\n*🛒 Ingredienti Esterni:*\n"
-            has_external = False
+            # Add external ingredients for this menu (only those with defined ingredients)
+            external_items = []
             for item in items:
                 recipe = item.recipe
                 status = external_service.get_status(recipe.id)
                 if status == "defined":
                     ingredients = external_service.get_ingredients(recipe.id)
                     ing_text = ", ".join(ingredients)
-                    text += f"  • {recipe.name}: {ing_text}\n"
-                    has_external = True
-                elif status == "none":
-                    text += f"  • {recipe.name}: ✅ nessuno\n"
-                    has_external = True
+                    external_items.append(f"  • {recipe.name}: {ing_text}")
 
-            if not has_external:
-                text += "  (nessuno marcato ancora)\n"
+            if external_items:
+                text += "\n*🛒 Ingredienti Esterni:*\n"
+                text += "\n".join(external_items) + "\n"
 
             text += "\n---\n\n"
 

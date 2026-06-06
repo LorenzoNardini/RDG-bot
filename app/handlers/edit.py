@@ -28,10 +28,9 @@ async def edit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f'Recipe not found: {recipe_name}')
             return ConversationHandler.END
 
-        # Store recipe in context
+        # Store recipe in context (DON'T store session - create new ones in handlers)
         context.user_data["edit_recipe_id"] = recipe.id
         context.user_data["edit_recipe_name"] = recipe.name
-        context.user_data["edit_session"] = session
 
         # Show edit options
         keyboard = [
@@ -56,8 +55,7 @@ async def edit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Error: {e}")
         return ConversationHandler.END
     finally:
-        if session:
-            session.close()
+        session.close()
 
 
 async def handle_field_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
