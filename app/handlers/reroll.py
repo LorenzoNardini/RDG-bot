@@ -10,8 +10,8 @@ CATEGORIES = ["carne rossa", "carne bianca", "pesce", "uova", "legumi", "altro"]
 async def reroll(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handle /reroll command.
-    Usage: /reroll <category> or /reroll <position>
-    Examples: /reroll pesce, /reroll 3
+    Usage: /reroll <category>, /reroll <position>, or /reroll <positions>
+    Examples: /reroll pesce, /reroll 3, /reroll 1 2 4, /reroll 1, 2, 4
     """
     session = get_session()
     try:
@@ -20,7 +20,7 @@ async def reroll(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not pending_menu_id:
             await update.message.reply_text(
-                "❌ No pending menu. Run /roll first.",
+                "No pending menu. Run /roll first.",
                 parse_mode="Markdown"
             )
             return
@@ -30,49 +30,70 @@ async def reroll(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not menu or menu.is_accepted():
             await update.message.reply_text(
-                "❌ Invalid menu. Run /roll first.",
+                "Invalid menu. Run /roll first.",
                 parse_mode="Markdown"
             )
             return
 
-        # Parse argument
+        # Parse arguments
         if not context.args:
             await update.message.reply_text(
-                "Usage: /reroll <category|position>\n"
-                "Examples: /reroll pesce, /reroll 3",
+                "Usage: /reroll <category|position|positions>\n"
+                "Examples: /reroll pesce, /reroll 3, /reroll 1 2 4",
                 parse_mode="Markdown"
             )
             return
 
-        arg = context.args[0].lower()
+        # Join all args and parse comma/space separated values
+        raw_arg = " ".join(context.args).lower()
 
-        # Check if it's a category or position
-        if arg in CATEGORIES:
-            # Reroll by category
-            success = menu_service.reroll_category(pending_menu_id, arg)
+        # Check if it's a single category
+        if raw_arg in CATEGORIES:
+            success = menu_service.reroll_category(pending_menu_id, raw_arg)
             if not success:
-                await update.message.reply_text(f"❌ Cannot reroll category: {arg}")
+                await update.message.reply_text(f"Cannot reroll category: {raw_arg}")
                 return
-            feedback = f"♻️ {arg.title()} regenerated!"
+            feedback = f"♻️ {raw_arg.title()} regenerated!"
         else:
-            # Try to parse as position
-            try:
-                position = int(arg)
-                if position < 1 or position > 7:
-                    await update.message.reply_text("❌ Position must be between 1 and 7.")
+            # Parse as positions (comma or space separated)
+            positions_str = raw_arg.replace(",", " ")
+            position_strs = positions_str.split()
+
+            positions = []
+            for pos_str in position_strs:
+                try:
+                    pos = int(pos_str)
+                    if pos < 1 or pos > 7:
+                        await update.message.reply_text(f"Position must be between 1 and 7, got {pos}.")
+                        return
+                    positions.append(pos)
+                except ValueError:
+                    await update.message.reply_text(
+                        f"Invalid argument: {pos_str}\n"
+                        "Use category name or position numbers (1-7).",
+                        parse_mode="Markdown"
+                    )
                     return
-                success = menu_service.reroll_position(pending_menu_id, position)
-                if not success:
-                    await update.message.reply_text(f"❌ Cannot reroll position {position}.")
-                    return
-                feedback = f"♻️ Position {position} regenerated!"
-            except ValueError:
-                await update.message.reply_text(
-                    f"❌ Invalid argument: {arg}\n"
-                    "Use category name or position (1-7).",
-                    parse_mode="Markdown"
-                )
+
+            if not positions:
+                await update.message.reply_text("No valid positions provided.")
                 return
+
+            # Reroll each position
+            failed = []
+            for pos in positions:
+                success = menu_service.reroll_position(pending_menu_id, pos)
+                if not success:
+                    failed.append(pos)
+
+            if failed:
+                await update.message.reply_text(f"Failed to reroll positions: {', '.join(map(str, failed))}")
+                return
+
+            if len(positions) == 1:
+                feedback = f"♻️ Position {positions[0]} regenerated!"
+            else:
+                feedback = f"♻️ Positions {', '.join(map(str, positions))} regenerated!"
 
         # Show updated menu
         items = menu_service.get_menu_items(pending_menu_id)

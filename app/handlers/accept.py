@@ -56,12 +56,22 @@ async def accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         unknown_recipes = external_service.get_recipes_needing_enrichment(recipe_ids)
 
         if unknown_recipes:
-            # Build numbered mapping
+            # Build numbered mapping and start conversational mode
             enrichment_recipes = {i: recipe.id for i, recipe in enumerate(unknown_recipes, 1)}
             context.user_data["enrichment_recipes"] = enrichment_recipes
+            context.user_data["enrichment_mode"] = "conversational"
+            context.user_data["enrichment_index"] = 0
 
-            # Show enrichment prompt
-            prompt = format_enrichment_prompt(unknown_recipes)
+            # Ask for first recipe conversationally
+            first_recipe = unknown_recipes[0]
+            prompt = (
+                f"📝 *External ingredients needed?*\n\n"
+                f"For: *{first_recipe.name}*\n\n"
+                f"Reply with:\n"
+                f"• `/external 1 jackfruit, turmeric`\n"
+                f"• `/noexternal 1`\n"
+                f"• `/skip` to skip all"
+            )
             await update.message.reply_text(prompt, parse_mode="Markdown")
 
     finally:
