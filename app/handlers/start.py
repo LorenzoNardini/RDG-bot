@@ -17,6 +17,9 @@ RICETTE:
 /add - Aggiungi ricetta
 /edit - Modifica ricetta (es: /edit "Pasta Carbonara")
 
+SHOPPING:
+/remember - Aggiungi articoli da comprare (es: /remember olio d'oliva, caffè)
+
 INGREDIENTI ESTERNI:
 /external - Marca ingredienti da comprare altrove
   Batch: /external 1 salmone, aneto; 2 turmerico

@@ -85,3 +85,17 @@ class ExternalIngredient(Base):
 
     def __repr__(self):
         return f"ExternalIngredient(recipe_id={self.recipe_id}, ingredient='{self.ingredient_name}')"
+
+
+class ShoppingReminder(Base):
+    """Temporary shopping reminders (NOT tied to recipes)."""
+    __tablename__ = "shopping_reminders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_name = Column(String, nullable=False, index=True)
+    active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        status = "active" if self.active else "inactive"
+        return f"ShoppingReminder(id={self.id}, item='{self.item_name}', status={status})"

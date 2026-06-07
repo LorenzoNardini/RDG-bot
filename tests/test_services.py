@@ -174,6 +174,64 @@ class TestMenuService:
         assert len(recent) == 3
 
 
+class TestShoppingReminderService:
+    def test_add_single_reminder(self, test_db):
+        from app.services.shopping_service import ShoppingReminderService
+        service = ShoppingReminderService(test_db)
+
+        added = service.add_reminders(["olive oil"])
+        assert added == 1
+        assert service.count_active() == 1
+
+    def test_add_multiple_reminders(self, test_db):
+        from app.services.shopping_service import ShoppingReminderService
+        service = ShoppingReminderService(test_db)
+
+        added = service.add_reminders(["olive oil", "coffee beans", "batteries"])
+        assert added == 3
+        assert service.count_active() == 3
+
+    def test_get_active_reminders(self, test_db):
+        from app.services.shopping_service import ShoppingReminderService
+        service = ShoppingReminderService(test_db)
+
+        service.add_reminders(["olive oil", "coffee"])
+        reminders = service.get_active_reminders()
+        assert len(reminders) == 2
+        assert "olive oil" in reminders
+        assert "coffee" in reminders
+
+    def test_duplicate_reminders_not_added(self, test_db):
+        from app.services.shopping_service import ShoppingReminderService
+        service = ShoppingReminderService(test_db)
+
+        service.add_reminders(["olive oil"])
+        added = service.add_reminders(["olive oil"])
+        assert added == 0
+        assert service.count_active() == 1
+
+    def test_clear_reminders(self, test_db):
+        from app.services.shopping_service import ShoppingReminderService
+        service = ShoppingReminderService(test_db)
+
+        service.add_reminders(["olive oil", "coffee"])
+        assert service.count_active() == 2
+
+        cleared = service.clear_reminders()
+        assert cleared == 2
+        assert service.count_active() == 0
+
+    def test_delete_reminder(self, test_db):
+        from app.services.shopping_service import ShoppingReminderService
+        service = ShoppingReminderService(test_db)
+
+        service.add_reminders(["olive oil", "coffee"])
+        deleted = service.delete_reminder("olive oil")
+        assert deleted
+        assert service.count_active() == 1
+        assert "coffee" in service.get_active_reminders()
+
+
 class TestExternalIngredientService:
     def test_set_ingredients_and_get(self, test_db, seed_recipes):
         recipe = seed_recipes[0]

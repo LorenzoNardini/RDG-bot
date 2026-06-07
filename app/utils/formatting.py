@@ -100,6 +100,28 @@ def format_recipe(recipe: Recipe) -> str:
     return text
 
 
+def format_shopping_summary(external_ingredients: list[str], reminders: list[str]) -> str:
+    """Format a consolidated shopping summary with both recipe ingredients and reminders."""
+    if not external_ingredients and not reminders:
+        return ""
+
+    lines = ["\n🛒 *Things to buy outside the online supermarket*\n"]
+
+    if external_ingredients:
+        lines.append("*From recipes:*")
+        for ing in external_ingredients:
+            lines.append(f"  • {ing}")
+
+    if reminders:
+        if external_ingredients:
+            lines.append("")
+        lines.append("*General reminders:*")
+        for item in reminders:
+            lines.append(f"  • {item}")
+
+    return "\n".join(lines)
+
+
 def format_enrichment_prompt(recipes: list[Recipe]) -> str:
     """Format enrichment prompt showing recipes that need external ingredient info."""
     if not recipes:

@@ -3,7 +3,8 @@ from telegram.ext import ContextTypes
 from app.database.db import get_session
 from app.services.menu_service import MenuService
 from app.services.external_service import ExternalIngredientService
-from app.utils.formatting import format_menu, format_enrichment_prompt
+from app.services.shopping_service import ShoppingReminderService
+from app.utils.formatting import format_menu, format_enrichment_prompt, format_shopping_summary
 
 
 async def accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -50,9 +51,27 @@ async def accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(menu_text, parse_mode="Markdown")
 
-        # Check for recipes needing external ingredient enrichment
+        # Collect external ingredients for recipes that have them defined
         recipe_ids = [item.recipe_id for item in items]
         external_service = ExternalIngredientService(session)
+        external_items = []
+        for recipe_id in recipe_ids:
+            if external_service.get_status(recipe_id) == "defined":
+                ingredients = external_service.get_ingredients(recipe_id)
+                external_items.extend(ingredients)
+
+        # Get shopping reminders
+        shopping_service = ShoppingReminderService(session)
+        reminders = shopping_service.get_active_reminders()
+
+        # Show combined shopping summary if there are items
+        if external_items or reminders:
+            summary = format_shopping_summary(external_items, reminders)
+            await update.message.reply_text(summary, parse_mode="Markdown")
+            # Clear reminders after displaying them
+            shopping_service.clear_reminders()
+
+        # Check for recipes needing external ingredient enrichment
         unknown_recipes = external_service.get_recipes_needing_enrichment(recipe_ids)
 
         if unknown_recipes:
