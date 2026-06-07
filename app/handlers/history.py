@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 from app.database.db import get_session
 from app.services.menu_service import MenuService
 from app.services.external_service import ExternalIngredientService
+from app.services.shopping_service import ShoppingReminderService
 from app.utils.formatting import format_menu
 
 
@@ -22,6 +23,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         text = "📚 *Ultimi Menu Accettati*\n\n"
         external_service = ExternalIngredientService(session)
+        shopping_service = ShoppingReminderService(session)
 
         for i, menu in enumerate(menus, 1):
             accepted_date = menu.accepted_at.strftime("%d/%m/%Y %H:%M") if menu.accepted_at else "pending"
@@ -50,6 +52,16 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += "\n".join(external_items) + "\n"
 
             text += "\n---\n\n"
+
+        # Add current shopping reminders
+        reminders = shopping_service.get_active_reminders()
+        if reminders:
+            text += "\n*📝 Promemoria Attuali:*\n"
+            for item in reminders:
+                text += f"  • {item}\n"
+            text += "\nPuoi aggiungere altri articoli con `/remember`\n"
+        else:
+            text += "\n_Nessun promemoria attivo. Usa `/remember` per aggiungere articoli da comprare._\n"
 
         await update.message.reply_text(text, parse_mode="Markdown")
 
