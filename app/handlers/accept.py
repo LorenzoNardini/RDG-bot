@@ -9,6 +9,11 @@ from app.utils.formatting import format_menu, format_enrichment_prompt, format_s
 
 async def accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /accept command - save pending menu to history."""
+    # Clear any stale enrichment state from previous /accept calls
+    context.user_data["enrichment_recipes"] = {}
+    context.user_data["enrichment_mode"] = None
+    context.user_data["enrichment_index"] = None
+
     session = get_session()
     try:
         user_id = update.effective_user.id
