@@ -67,12 +67,11 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 text += "\n_Nessun promemoria attivo. Usa `/remember` per aggiungere articoli da comprare._\n"
 
-            await update.message.reply_text(text, parse_mode="Markdown")
+            await update.message.reply_text(text)
 
         except Exception as e:
             await update.message.reply_text(
-                f"Error loading history: {str(e)}\n\nPlease try again.",
-                parse_mode="Markdown"
+                f"Error loading history: {str(e)}\n\nPlease try again."
             )
 
     finally:
