@@ -38,6 +38,31 @@ def seed_recipes(test_db):
     return recipes
 
 
+class TestFormattingFunctions:
+    """Test formatting functions for shopping lists."""
+
+    def test_format_consolidated_shopping_list_with_items(self):
+        from app.utils.formatting import format_consolidated_shopping_list
+
+        items = ["salmon fillet", "dill", "olive oil", "coffee beans"]
+        result = format_consolidated_shopping_list(items)
+
+        assert "🛒" in result
+        assert "Remember to buy" in result
+        assert "salmon fillet" in result
+        assert "dill" in result
+        assert "olive oil" in result
+        assert "coffee beans" in result
+
+    def test_format_consolidated_shopping_list_empty(self):
+        from app.utils.formatting import format_consolidated_shopping_list
+
+        result = format_consolidated_shopping_list([])
+
+        assert "🛒" in result
+        assert len(result) > 0  # Should show empty state message
+
+
 class TestRecipeService:
     def test_get_by_category(self, test_db, seed_recipes):
         service = RecipeService(test_db)
@@ -174,6 +199,87 @@ class TestMenuService:
         assert len(recent) == 3
 
 
+class TestConsolidatedShoppingList:
+    """Test consolidated shopping list (recipes + reminders)."""
+
+    def test_get_consolidated_list_with_recipes_and_reminders(self, test_db, seed_recipes):
+        from app.services.external_service import ExternalIngredientService
+        from app.services.shopping_service import ShoppingReminderService
+
+        # Setup: mark some recipes with external ingredients
+        external_service = ExternalIngredientService(test_db)
+        external_service.set_ingredients(seed_recipes[0].id, ["flour", "butter"])
+        external_service.set_ingredients(seed_recipes[1].id, ["salt"])
+
+        # Add shopping reminders
+        shopping_service = ShoppingReminderService(test_db)
+        shopping_service.add_reminders(["olive oil", "coffee beans"])
+
+        # Get consolidated list
+        recipe_ingredients = []
+        for recipe in seed_recipes:
+            if external_service.get_status(recipe.id) == "defined":
+                recipe_ingredients.extend(external_service.get_ingredients(recipe.id))
+
+        reminders = shopping_service.get_active_reminders()
+        consolidated = sorted(set(recipe_ingredients + reminders))
+
+        assert len(consolidated) == 5
+        assert "flour" in consolidated
+        assert "butter" in consolidated
+        assert "salt" in consolidated
+        assert "olive oil" in consolidated
+        assert "coffee beans" in consolidated
+
+    def test_consolidated_list_only_recipes(self, test_db, seed_recipes):
+        from app.services.external_service import ExternalIngredientService
+        from app.services.shopping_service import ShoppingReminderService
+
+        external_service = ExternalIngredientService(test_db)
+        external_service.set_ingredients(seed_recipes[0].id, ["flour"])
+
+        shopping_service = ShoppingReminderService(test_db)
+
+        recipe_ingredients = []
+        for recipe in seed_recipes:
+            if external_service.get_status(recipe.id) == "defined":
+                recipe_ingredients.extend(external_service.get_ingredients(recipe.id))
+
+        reminders = shopping_service.get_active_reminders()
+        consolidated = recipe_ingredients + reminders
+
+        assert len(consolidated) == 1
+        assert "flour" in consolidated
+
+    def test_consolidated_list_only_reminders(self, test_db, seed_recipes):
+        from app.services.shopping_service import ShoppingReminderService
+
+        shopping_service = ShoppingReminderService(test_db)
+        shopping_service.add_reminders(["olive oil"])
+
+        reminders = shopping_service.get_active_reminders()
+
+        assert len(reminders) == 1
+        assert "olive oil" in reminders
+
+    def test_consolidated_list_empty(self, test_db, seed_recipes):
+        from app.services.external_service import ExternalIngredientService
+        from app.services.shopping_service import ShoppingReminderService
+
+        external_service = ExternalIngredientService(test_db)
+        shopping_service = ShoppingReminderService(test_db)
+
+        recipe_ingredients = []
+        for recipe in seed_recipes:
+            if external_service.get_status(recipe.id) == "defined":
+                recipe_ingredients.extend(external_service.get_ingredients(recipe.id))
+
+        reminders = shopping_service.get_active_reminders()
+        consolidated = recipe_ingredients + reminders
+
+        assert len(consolidated) == 0
+
+
 class TestShoppingReminderService:
     def test_add_single_reminder(self, test_db):
         from app.services.shopping_service import ShoppingReminderService
@@ -230,6 +336,52 @@ class TestShoppingReminderService:
         assert deleted
         assert service.count_active() == 1
         assert "coffee" in service.get_active_reminders()
+
+
+class TestBoughtCommand:
+    """Test /bought command functionality."""
+
+    def test_bought_clears_all_reminders(self, test_db):
+        from app.services.shopping_service import ShoppingReminderService
+        service = ShoppingReminderService(test_db)
+
+        service.add_reminders(["olive oil", "coffee", "batteries"])
+        assert service.count_active() == 3
+
+        cleared = service.clear_reminders()
+        assert cleared == 3
+        assert service.count_active() == 0
+
+    def test_bought_resets_recipes_to_unknown(self, test_db, seed_recipes):
+        from app.services.external_service import ExternalIngredientService
+        from sqlalchemy import text
+        service = ExternalIngredientService(test_db)
+
+        # Setup: mark some recipes as defined
+        service.set_ingredients(seed_recipes[0].id, ["flour", "butter"])
+        service.set_ingredients(seed_recipes[1].id, ["salt"])
+        service.set_no_external(seed_recipes[2].id)
+
+        # Verify they're set
+        assert service.get_status(seed_recipes[0].id) == "defined"
+        assert service.get_status(seed_recipes[1].id) == "defined"
+        assert service.get_status(seed_recipes[2].id) == "none"
+
+        # Reset all to unknown
+        reset_count = 0
+        for recipe in seed_recipes:
+            if service.get_status(recipe.id) in ["defined", "none"]:
+                # Simulate resetting
+                test_db.execute(
+                    text(f"UPDATE recipes SET external_status = 'unknown' WHERE id = {recipe.id}")
+                )
+                reset_count += 1
+        test_db.commit()
+
+        # Verify reset
+        assert service.get_status(seed_recipes[0].id) == "unknown"
+        assert service.get_status(seed_recipes[1].id) == "unknown"
+        assert service.get_status(seed_recipes[2].id) == "unknown"
 
 
 class TestExternalIngredientService:

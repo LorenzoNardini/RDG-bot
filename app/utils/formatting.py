@@ -1,5 +1,17 @@
 from app.models.models import WeeklyMenu, WeeklyMenuItem, Recipe
 
+
+def format_consolidated_shopping_list(items: list[str]) -> str:
+    """Format a consolidated shopping list (recipes + reminders combined)."""
+    if not items:
+        return "🛒 Remember to buy:\n  (nothing right now)"
+
+    lines = ["🛒 Remember to buy:"]
+    for item in sorted(set(items)):  # Deduplicate and sort
+        lines.append(f"  • {item}")
+
+    return "\n".join(lines)
+
 CATEGORY_EMOJI = {
     "carne rossa": "🥩",
     "carne bianca": "🍗",

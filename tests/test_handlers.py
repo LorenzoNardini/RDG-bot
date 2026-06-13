@@ -50,6 +50,96 @@ def create_mock_update(text, args=None):
 
 
 @pytest.mark.asyncio
+class TestRememberHandler:
+    async def test_remember_shows_consolidated_shopping_list(self, test_db, seed_recipes):
+        """Test that /remember displays consolidated shopping list."""
+        from app.handlers.remember import remember
+        from app.services.external_service import ExternalIngredientService
+        from app.services.shopping_service import ShoppingReminderService
+
+        # Setup: add recipe ingredients and reminders
+        external_service = ExternalIngredientService(test_db)
+        external_service.set_ingredients(seed_recipes[0].id, ["flour", "butter"])
+
+        shopping_service = ShoppingReminderService(test_db)
+        shopping_service.add_reminders(["olive oil"])
+
+        # Create mock update and context
+        update, message = create_mock_update("/remember", ["olive oil", "coffee"])
+        context = MagicMock()
+        context.args = ["olive oil", "coffee"]
+        context.user_data = {}
+
+        with patch("app.handlers.remember.get_session", return_value=test_db):
+            await remember(update, context)
+
+        # Verify that a message was sent (contains consolidated list)
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "🛒" in call_args
+        assert "Remember to buy" in call_args or "remember to buy" in call_args.lower()
+
+    async def test_remember_no_items_shows_message(self, test_db):
+        """Test that /remember with no items shows appropriate message."""
+        from app.handlers.remember import remember
+
+        update, message = create_mock_update("/remember", [])
+        context = MagicMock()
+        context.args = []
+        context.user_data = {}
+
+        with patch("app.handlers.remember.get_session", return_value=test_db):
+            await remember(update, context)
+
+        message.reply_text.assert_called()
+
+
+@pytest.mark.asyncio
+class TestBoughtHandler:
+    async def test_bought_clears_reminders(self, test_db):
+        """Test that /bought clears all shopping reminders."""
+        from app.handlers.bought import bought
+        from app.services.shopping_service import ShoppingReminderService
+
+        # Setup reminders
+        service = ShoppingReminderService(test_db)
+        service.add_reminders(["olive oil", "coffee"])
+
+        update, message = create_mock_update("/bought", [])
+        context = MagicMock()
+        context.args = []
+        context.user_data = {}
+
+        with patch("app.handlers.bought.get_session", return_value=test_db):
+            await bought(update, context)
+
+        # Verify reminders were cleared
+        assert service.count_active() == 0
+        message.reply_text.assert_called()
+
+    async def test_bought_shows_confirmation(self, test_db):
+        """Test that /bought shows what was cleared."""
+        from app.handlers.bought import bought
+        from app.services.shopping_service import ShoppingReminderService
+
+        service = ShoppingReminderService(test_db)
+        service.add_reminders(["olive oil"])
+
+        update, message = create_mock_update("/bought", [])
+        context = MagicMock()
+        context.args = []
+        context.user_data = {}
+
+        with patch("app.handlers.bought.get_session", return_value=test_db):
+            await bought(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        # Should indicate items were marked as bought
+        assert "bought" in call_args.lower() or "cleared" in call_args.lower()
+
+
+@pytest.mark.asyncio
 class TestListHandler:
     async def test_list_single_word_category(self, test_db, seed_recipes):
         """Test /list with single-word category like 'pesce'."""
