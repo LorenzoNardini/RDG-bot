@@ -153,3 +153,46 @@ def format_enrichment_prompt(recipes: list[Recipe]) -> str:
     lines.append("• Skip: `/skip`")
 
     return "\n".join(lines)
+
+
+def format_recipe_selection(recipes: list[Recipe], position: int, category: str = None) -> str:
+    """Format a numbered list of recipes for /set selection."""
+    if not recipes:
+        return "No recipes found."
+
+    emoji = CATEGORY_EMOJI.get(category, "📌") if category else "📌"
+    header = f"{emoji} Position {position} ({category.title()})" if category else f"Position {position}"
+
+    lines = [header, "", "Choose one recipe:"]
+
+    # Sort alphabetically
+    sorted_recipes = sorted(recipes, key=lambda r: r.name)
+    for i, recipe in enumerate(sorted_recipes, 1):
+        side_note = ""
+        if recipe.needs_side and recipe.suggested_side:
+            side_note = f" (+ {recipe.suggested_side})"
+        lines.append(f"{i}. {recipe.name}{side_note}")
+
+    lines.append("")
+    lines.append(f"Reply with: `/set {position} <recipe_number>`")
+
+    return "\n".join(lines)
+
+
+def format_category_selection() -> str:
+    """Format category selection for /set 7."""
+    lines = [
+        "Position 7 is a free choice.",
+        "",
+        "Choose a category:",
+        "",
+        "1. 🥩 Carne rossa",
+        "2. 🍗 Carne bianca",
+        "3. 🐟 Pesce",
+        "4. 🥚 Uova",
+        "5. 🫘 Legumi",
+        "6. 🍝 Altro",
+        "",
+        "Reply with: `/set 7 <category_number>`",
+    ]
+    return "\n".join(lines)

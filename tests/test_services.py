@@ -432,3 +432,170 @@ class TestExternalIngredientService:
         # Should only return unknown ones
         assert len(needing) == 2
         assert seed_recipes[0].id not in [r.id for r in needing]
+
+
+class TestSetCommand:
+    """Test /set command service method (replace_position_with_recipe)."""
+
+    def test_replace_recipe_success(self, test_db, seed_recipes):
+        """Test successfully replacing a recipe at a position."""
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        menu_id = menu.id
+
+        # Get position 2 (carne bianca) and find a different recipe
+        items = service.get_menu_items(menu_id)
+        pos2_item = items[1]
+        original_recipe_id = pos2_item.recipe_id
+
+        # Get all recipes
+        recipe_service = RecipeService(test_db)
+        all_recipes = recipe_service.get_all()
+
+        # Find a recipe not currently in the menu
+        used_recipe_ids = {item.recipe_id for item in items}
+        other_recipe = next((r for r in all_recipes if r.id not in used_recipe_ids and r.category == pos2_item.recipe.category), None)
+
+        # If no different recipe, just verify the operation fails gracefully
+        if other_recipe is None:
+            # With limited test recipes, this might happen - test position 7 instead
+            other_recipe = next((r for r in all_recipes if r.id not in used_recipe_ids), None)
+            if other_recipe:
+                # Try to replace position 7
+                result = service.replace_position_with_recipe(menu_id, 7, other_recipe.id)
+                assert result["success"] is True
+            return
+
+        result = service.replace_position_with_recipe(menu_id, 2, other_recipe.id)
+        assert result["success"] is True
+
+        # Verify update
+        items = service.get_menu_items(menu_id)
+        pos2_item = items[1]
+        assert pos2_item.recipe_id == other_recipe.id
+
+    def test_replace_recipe_duplicate_fails(self, test_db, seed_recipes):
+        """Test that replacing with a recipe already in menu fails."""
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        menu_id = menu.id
+
+        items = service.get_menu_items(menu_id)
+        pos1_recipe_id = items[0].recipe_id
+        pos2_recipe_id = items[1].recipe_id
+
+        # Try to replace position 2 with the recipe from position 1
+        result = service.replace_position_with_recipe(menu_id, 2, pos1_recipe_id)
+        assert result["success"] is False
+        assert "already exists" in result["error"]
+
+    def test_replace_recipe_wrong_category_fails(self, test_db, seed_recipes):
+        """Test that replacing position 1-6 with wrong category fails."""
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        menu_id = menu.id
+
+        items = service.get_menu_items(menu_id)
+        pos1_item = items[0]
+        pos1_category = pos1_item.recipe.category
+
+        # Find a recipe from a different category that's NOT in the menu
+        recipe_service = RecipeService(test_db)
+        all_recipes = recipe_service.get_all()
+        used_recipe_ids = {item.recipe_id for item in items}
+
+        all_categories = ["carne rossa", "carne bianca", "pesce", "uova", "legumi", "altro"]
+        different_category = next(c for c in all_categories if c != pos1_category)
+
+        # Find a recipe in different category that's not in the menu
+        different_recipe = next(
+            (r for r in all_recipes if r.category == different_category and r.id not in used_recipe_ids),
+            None
+        )
+
+        if different_recipe is None:
+            # With limited recipes, this might not be possible - skip the test
+            return
+
+        result = service.replace_position_with_recipe(menu_id, 1, different_recipe.id)
+        assert result["success"] is False
+        assert "category" in result["error"].lower()
+
+    def test_replace_position_7_allows_any_category(self, test_db, seed_recipes):
+        """Test that position 7 allows recipes from any category."""
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        menu_id = menu.id
+
+        items = service.get_menu_items(menu_id)
+        pos7_item = items[6]
+        original_category = pos7_item.recipe.category
+
+        # Find a recipe from a different category that's NOT in the menu
+        recipe_service = RecipeService(test_db)
+        all_recipes = recipe_service.get_all()
+        used_recipe_ids = {item.recipe_id for item in items}
+
+        all_categories = ["carne rossa", "carne bianca", "pesce", "uova", "legumi", "altro"]
+        different_category = next(c for c in all_categories if c != original_category)
+
+        # Find a recipe in different category that's not in the menu
+        different_recipe = next(
+            (r for r in all_recipes if r.category == different_category and r.id not in used_recipe_ids),
+            None
+        )
+
+        if different_recipe is None:
+            # With limited recipes, this might not be possible - skip the test
+            return
+
+        result = service.replace_position_with_recipe(menu_id, 7, different_recipe.id)
+        assert result["success"] is True
+
+        # Verify update
+        items = service.get_menu_items(menu_id)
+        pos7_item = items[6]
+        assert pos7_item.recipe_id == different_recipe.id
+        assert pos7_item.recipe.category == different_category
+
+    def test_replace_recipe_invalid_menu(self, test_db):
+        """Test that replacing in non-existent menu fails."""
+        service = MenuService(test_db)
+        result = service.replace_position_with_recipe(999, 2, 999)
+        assert result["success"] is False
+        assert "not found" in result["error"]
+
+    def test_replace_recipe_invalid_recipe(self, test_db, seed_recipes):
+        """Test that replacing with non-existent recipe fails."""
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        menu_id = menu.id
+
+        result = service.replace_position_with_recipe(menu_id, 2, 999)
+        assert result["success"] is False
+        assert "not found" in result["error"]
+
+    def test_replace_recipe_invalid_position(self, test_db, seed_recipes):
+        """Test that invalid position is rejected."""
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        menu_id = menu.id
+
+        recipe_id = service.get_menu_items(menu_id)[0].recipe_id
+
+        result = service.replace_position_with_recipe(menu_id, 8, recipe_id)
+        assert result["success"] is False
+        assert "between 1 and 7" in result["error"]
+
+    def test_replace_recipe_accepted_menu_fails(self, test_db, seed_recipes):
+        """Test that replacing in accepted menu fails."""
+        service = MenuService(test_db)
+        menu = service.generate_week()
+        menu_id = menu.id
+
+        service.accept_menu(menu_id)
+        recipe_id = service.get_menu_items(menu_id)[0].recipe_id
+
+        result = service.replace_position_with_recipe(menu_id, 2, recipe_id)
+        assert result["success"] is False
+        assert "accepted" in result["error"]

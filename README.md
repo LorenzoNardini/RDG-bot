@@ -5,7 +5,7 @@ A lightweight Telegram bot that generates random weekly dinner menus with progre
 **Status:** Production-ready (deployed on Railway)  
 **Architecture:** Service-oriented with conversation handlers  
 **Data Model:** SQLAlchemy ORM with SQLite (dev) / PostgreSQL (prod)  
-**Test Coverage:** 46 tests (service layer + handler layer)
+**Test Coverage:** 62 tests (service layer + handler layer)
 
 ---
 
@@ -25,8 +25,9 @@ The system is designed for **minimal friction** (mobile-first Telegram interface
 
 ### Core Menu Generation
 - 🎲 **Random weekly menus** — Generates 7-day plans with one recipe from each of 6 categories (positions 1-6), one free-choice position (7)
-- ♻️ **Smart reroll** — Change recipes by category (`/reroll pesce`) or by position (`/reroll 3`), with category constraints enforced for positions 1-6
+- ♻️ **Smart reroll** — "Surprise me" mode: change recipes by category (`/reroll pesce`) or by position (`/reroll 3`), with category constraints enforced for positions 1-6
 - ♻️ **Batch reroll** — Change multiple positions at once (`/reroll 1 2 4`)
+- 👆 **Deterministic selection** — "I know what I want" mode: browse and pick specific recipes by position (`/set 2` → list → `/set 2 3`)
 - 💾 **Menu history** — Save accepted menus; retrieve last 1 or last N menus (`/history` or `/history 3`)
 - 📝 **Recipe management** — Add recipes, edit existing recipes (conversational flows)
 
@@ -68,6 +69,7 @@ RDG Bot/
 │   │   ├── start.py                 # /start, /help (help text)
 │   │   ├── roll.py                  # /roll
 │   │   ├── reroll.py                # /reroll (category or position(s))
+│   │   ├── set_.py                  # /set (deterministic recipe selection)
 │   │   ├── accept.py                # /accept (saves menu, triggers enrichment)
 │   │   ├── external.py              # /external, /noexternal, /skip (enrichment entry)
 │   │   ├── fill_missing.py          # /fill_missing (manual enrichment of all unknown)
@@ -199,7 +201,7 @@ class WeeklyMenuItem(Base):
 **Design:** Thin wrapper over ORM; no business logic, pure CRUD.
 
 ### MenuService
-**Responsibilities:** Menu generation, reroll logic, state transitions
+**Responsibilities:** Menu generation, reroll logic, deterministic selection, state transitions
 
 **Key Methods:**
 - `generate_week()` → WeeklyMenu — Creates new pending menu with 7 items
@@ -212,6 +214,11 @@ class WeeklyMenuItem(Base):
   - Positions 1-6: New recipe must be same category as old one (constraint enforcement)
   - Position 7: Any recipe allowed
 - `reroll_positions(menu_id, positions: List[int])` → bool — Batch reroll
+- `replace_position_with_recipe(menu_id, position, recipe_id)` → dict
+  - Validates recipe exists and is not duplicate
+  - For positions 1-6: enforces category constraint
+  - For position 7: allows any category
+  - Returns `{"success": bool, "error": str}` with validation details
 - `accept_menu(menu_id)` → None — Sets `accepted_at` timestamp
 - `get_recent_accepted_menus(limit=5)` → List[WeeklyMenu] — For `/history`
 
@@ -355,6 +362,46 @@ class WeeklyMenuItem(Base):
    - Show external ingredients per recipe (if status="defined")
 5. Show active shopping reminders + prompt to use `/remember`
 
+### /set
+**Purpose:** Deterministic recipe selection — "I know what I want" mode
+
+**Five forms:**
+
+1. **`/set <position>`** — Show all available recipes for that position
+   - Positions 1-6: Shows recipes from current category (maintains constraint)
+   - Position 7: Shows category selector (since position 7 has no fixed category)
+
+2. **`/set <position> <recipe_number>`** — Set the recipe (positions 1-6)
+   - Requires prior `/set <position>` to establish state
+   - Validates recipe number is valid
+   - Validates no duplicate recipes in menu
+   - Maintains category constraint for positions 1-6
+
+3. **`/set 7`** — Show category selector for position 7
+   - Displays 6 categories with numbers
+   - Stores state for next step
+
+4. **`/set 7 <category_number>`** — Show recipes from selected category
+   - Validates category number (1-6)
+   - Displays sorted recipe list
+   - Stores choices in context
+
+5. **`/set 7 <category_number> <recipe_number>`** — Set the recipe for position 7
+   - Validates category and recipe numbers match stored state
+   - Validates no duplicates
+   - No category constraints (position 7 is free choice)
+
+**State Management:** Uses `context.user_data["set_selection"]` to store:
+- Current position
+- Current category (for positions 1-6)
+- Numbered recipe choices (temporary, valid only for current selection)
+
+**Validation:**
+- No duplicate recipes in menu
+- Positions 1-6 maintain their original category
+- Position 7 allows any category
+- Friendly error messages for invalid inputs
+
 ### /list [category]
 **Flow:**
 1. If category provided: filter recipes
@@ -491,20 +538,22 @@ tests/
 │   ├── TestExternalIngredientService (status, ingredients)
 │   ├── TestShoppingReminderService (reminders)
 │   ├── TestConsolidatedShoppingList (formatting)
-│   └── TestBoughtCommand (reset logic)
+│   ├── TestBoughtCommand (reset logic)
+│   └── TestSetCommand (deterministic selection validation)
 └── test_handlers.py
     ├── TestRememberHandler (shopping list)
     ├── TestBoughtHandler (clear & reset)
     ├── TestListHandler (filtering)
     ├── TestHistoryHandler (pagination)
     ├── TestExternalHandler (parsing)
-    └── TestRerollHandler (constraints)
+    ├── TestRerollHandler (constraints)
+    └── TestSetHandler (recipe selection flow)
 ```
 
 ### Coverage
-- **Service layer:** 30+ tests covering CRUD, state transitions, constraints
-- **Handler layer:** 16+ tests covering argument parsing, state flow, error cases
-- **Total:** 46 tests, all passing
+- **Service layer:** 38+ tests covering CRUD, state transitions, constraints, deterministic selection
+- **Handler layer:** 24+ tests covering argument parsing, state flow, error cases, multi-step flows
+- **Total:** 62 tests, all passing
 
 ### Test Database
 - In-memory SQLite (`:memory:`) for speed
@@ -620,7 +669,8 @@ app.run_webhook(listen="0.0.0.0", port=PORT, url_path="/webhook", webhook_url=f"
 | `/start` | | Show help |
 | `/help` | | Show all commands |
 | `/roll` | | Generate menu |
-| `/reroll` | `<category\|position...>` | Change recipe(s) |
+| `/reroll` | `<category\|position...>` | Random recipe change(s) |
+| `/set` | `<position> [recipe_number]` | Deterministic recipe selection |
 | `/accept` | | Save menu, start enrichment |
 | `/external` | `<N> ingredient...` | Set external ingredients |
 | `/noexternal` | `<N...>` | Mark recipes as having no external ingredients |

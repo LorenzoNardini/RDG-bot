@@ -175,6 +175,67 @@ class MenuService:
             WeeklyMenu.accepted_at.isnot(None)
         ).order_by(WeeklyMenu.accepted_at.desc()).limit(limit).all()
 
+    def replace_position_with_recipe(self, menu_id: int, position: int, recipe_id: int) -> dict:
+        """
+        Replace the recipe at a given position with a specific recipe.
+
+        Returns dict with:
+        - success (bool)
+        - error (str) if success=False
+
+        Validates:
+        - Menu exists and is pending
+        - Position is 1-7
+        - Recipe exists
+        - For positions 1-6: recipe must be same category as current
+        - No duplicate recipes in menu
+        """
+        # Validate menu
+        menu = self.get_menu(menu_id)
+        if not menu:
+            return {"success": False, "error": "Menu not found."}
+        if menu.is_accepted():
+            return {"success": False, "error": "Cannot modify an accepted menu."}
+
+        # Validate position
+        if position < 1 or position > 7:
+            return {"success": False, "error": "Position must be between 1 and 7."}
+
+        # Validate recipe exists
+        recipe = self.session.query(Recipe).filter(Recipe.id == recipe_id).first()
+        if not recipe:
+            return {"success": False, "error": "Recipe not found."}
+
+        # Get current item at position
+        item = self.session.query(WeeklyMenuItem).filter(
+            WeeklyMenuItem.menu_id == menu_id,
+            WeeklyMenuItem.position == position
+        ).first()
+        if not item:
+            return {"success": False, "error": f"Position {position} not found in menu."}
+
+        # Get all current items to check duplicates and categories
+        current_items = self.get_menu_items(menu_id)
+        selected_recipe_ids = {i.recipe_id for i in current_items if i.position != position}
+
+        # Check for duplicate
+        if recipe_id in selected_recipe_ids:
+            return {"success": False, "error": f"Recipe '{recipe.name}' already exists in this menu."}
+
+        # For positions 1-6, validate category constraint
+        if position <= 6:
+            original_category = item.recipe.category
+            if recipe.category != original_category:
+                return {
+                    "success": False,
+                    "error": f"Position {position} requires a {original_category} recipe, but '{recipe.name}' is {recipe.category}."
+                }
+
+        # All validations passed, update the item
+        item.recipe_id = recipe_id
+        self.session.commit()
+        return {"success": True}
+
     def delete_menu(self, menu_id: int) -> bool:
         """Delete a menu and its items."""
         menu = self.get_menu(menu_id)

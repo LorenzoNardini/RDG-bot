@@ -20,6 +20,7 @@ from app.handlers.fill_missing import fill_missing
 from app.handlers.ingredients import ingredients_cmd
 from app.handlers.remember import remember
 from app.handlers.bought import bought
+from app.handlers.set_ import set_cmd
 from app.handlers.edit import get_edit_handler
 
 # Set up logging
@@ -97,6 +98,7 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("roll", roll))
     app.add_handler(CommandHandler("reroll", reroll))
+    app.add_handler(CommandHandler("set", set_cmd))
     app.add_handler(CommandHandler("accept", accept))
     app.add_handler(CommandHandler("list", list_recipes))
     app.add_handler(CommandHandler("history", history))

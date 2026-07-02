@@ -8,6 +8,12 @@ Genera un menu settimanale casuale per ridurre la fatica decisionale.
 MENU:
 /roll - Genera nuovo menu settimanale
 /reroll - Rigenera piatti (es: /reroll 3 oppure /reroll 1 2 4)
+/set - Scegli un piatto specifico
+  Es: /set 2 → mostra piatti
+      /set 2 3 → scegli piatto
+      /set 7 → scegli categoria
+      /set 7 2 → mostra piatti categoria
+      /set 7 2 4 → scegli piatto
 /accept - Accetta menu e salvalo
 /history - Vedi ultimo menu accettato (es: /history 3 per gli ultimi 3)
 

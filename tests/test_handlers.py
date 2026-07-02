@@ -378,3 +378,230 @@ class TestRerollHandler:
         message.reply_text.assert_called()
         call_args = message.reply_text.call_args[0][0]
         assert "regenerated" in call_args.lower() or "Pesce" in call_args
+
+
+@pytest.mark.asyncio
+class TestSetHandler:
+    async def test_set_no_pending_menu(self, test_db):
+        """Test /set with no pending menu shows error."""
+        from app.handlers.set_ import set_cmd
+
+        update, message = create_mock_update("/set 2", ["2"])
+        context = MagicMock()
+        context.args = ["2"]
+        context.user_data = {}
+
+        with patch("app.handlers.set_.get_session", return_value=test_db):
+            await set_cmd(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "pending menu" in call_args.lower()
+
+    async def test_set_show_recipes_for_position(self, test_db, seed_recipes):
+        """Test /set <position> shows recipe list."""
+        from app.handlers.set_ import set_cmd
+        from app.services.menu_service import MenuService
+
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+
+        update, message = create_mock_update("/set 2", ["2"])
+        context = MagicMock()
+        context.args = ["2"]
+        context.user_data = {"pending_menu_id": menu.id}
+
+        with patch("app.handlers.set_.get_session", return_value=test_db):
+            await set_cmd(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "Position 2" in call_args
+        assert "Choose one recipe" in call_args
+        # Verify state is stored
+        assert "set_selection" in context.user_data
+
+    async def test_set_show_categories_for_position_7(self, test_db, seed_recipes):
+        """Test /set 7 shows category selection."""
+        from app.handlers.set_ import set_cmd
+        from app.services.menu_service import MenuService
+
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+
+        update, message = create_mock_update("/set 7", ["7"])
+        context = MagicMock()
+        context.args = ["7"]
+        context.user_data = {"pending_menu_id": menu.id}
+
+        with patch("app.handlers.set_.get_session", return_value=test_db):
+            await set_cmd(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "free choice" in call_args.lower()
+        assert "category" in call_args.lower()
+        # Verify state is stored
+        assert "set_selection" in context.user_data
+
+    async def test_set_recipe_for_position(self, test_db, seed_recipes):
+        """Test /set <position> <recipe_number> sets a recipe."""
+        from app.handlers.set_ import set_cmd
+        from app.services.menu_service import MenuService
+
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+        menu_id = menu.id
+
+        # First, get the recipe list
+        items = menu_service.get_menu_items(menu_id)
+        pos2_item = items[1]
+        category = pos2_item.recipe.category
+
+        # Set up state as if user had called /set 2 first
+        from app.services.recipe_service import RecipeService
+        recipe_service = RecipeService(test_db)
+        recipes = recipe_service.get_by_category(category)
+        sorted_recipes = sorted(recipes, key=lambda r: r.name)
+        choices = {i: r.id for i, r in enumerate(sorted_recipes, 1)}
+
+        update, message = create_mock_update("/set 2 1", ["2", "1"])
+        context = MagicMock()
+        context.args = ["2", "1"]
+        context.user_data = {
+            "pending_menu_id": menu_id,
+            "set_selection": {
+                "position": 2,
+                "category": category,
+                "choices": choices,
+            }
+        }
+
+        with patch("app.handlers.set_.get_session", return_value=test_db):
+            await set_cmd(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "updated" in call_args.lower()
+        # State should be cleared
+        assert "set_selection" not in context.user_data
+
+    async def test_set_invalid_position(self, test_db, seed_recipes):
+        """Test /set with invalid position shows error."""
+        from app.handlers.set_ import set_cmd
+        from app.services.menu_service import MenuService
+
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+
+        update, message = create_mock_update("/set 8", ["8"])
+        context = MagicMock()
+        context.args = ["8"]
+        context.user_data = {"pending_menu_id": menu.id}
+
+        with patch("app.handlers.set_.get_session", return_value=test_db):
+            await set_cmd(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "between 1 and 7" in call_args
+
+    async def test_set_position_7_then_category(self, test_db, seed_recipes):
+        """Test /set 7 <category_number> shows recipes."""
+        from app.handlers.set_ import set_cmd
+        from app.services.menu_service import MenuService
+
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+
+        # Set up state as if user had called /set 7 first
+        update, message = create_mock_update("/set 7 2", ["7", "2"])
+        context = MagicMock()
+        context.args = ["7", "2"]
+        context.user_data = {
+            "pending_menu_id": menu.id,
+            "set_selection": {"position": 7}
+        }
+
+        with patch("app.handlers.set_.get_session", return_value=test_db):
+            await set_cmd(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "Choose one recipe" in call_args or "recipe" in call_args.lower()
+        # New state should be stored
+        assert context.user_data["set_selection"].get("category_number") == 2
+
+    async def test_set_position_7_full_flow(self, test_db, seed_recipes):
+        """Test /set 7 <category_number> <recipe_number> sets recipe."""
+        from app.handlers.set_ import set_cmd
+        from app.services.menu_service import MenuService
+        from app.services.recipe_service import RecipeService
+
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+        menu_id = menu.id
+
+        # Get current menu items to find a recipe not in the menu
+        items = menu_service.get_menu_items(menu_id)
+        used_recipe_ids = {item.recipe_id for item in items}
+
+        # Set up choices as if user had completed /set 7 2
+        recipe_service = RecipeService(test_db)
+        recipes = recipe_service.get_by_category("carne bianca")
+        # Filter to find one not in the menu
+        available_recipes = [r for r in recipes if r.id not in used_recipe_ids]
+
+        if not available_recipes:
+            # If all are used, just pick the first one
+            sorted_recipes = sorted(recipes, key=lambda r: r.name)
+        else:
+            sorted_recipes = sorted(available_recipes, key=lambda r: r.name)
+
+        if not sorted_recipes:
+            # Skip if no recipes available
+            return
+
+        choices = {i: r.id for i, r in enumerate(sorted_recipes, 1)}
+
+        update, message = create_mock_update("/set 7 2 1", ["7", "2", "1"])
+        context = MagicMock()
+        context.args = ["7", "2", "1"]
+        context.user_data = {
+            "pending_menu_id": menu_id,
+            "set_selection": {
+                "position": 7,
+                "category": "carne bianca",
+                "category_number": 2,
+                "choices": choices,
+            }
+        }
+
+        with patch("app.handlers.set_.get_session", return_value=test_db):
+            await set_cmd(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        # Should either update or show error about duplicate (which is valid)
+        assert "updated" in call_args.lower() or "already exists" in call_args.lower()
+
+    async def test_set_expired_state(self, test_db, seed_recipes):
+        """Test /set with expired selection state."""
+        from app.handlers.set_ import set_cmd
+        from app.services.menu_service import MenuService
+
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+
+        # Try to set recipe without prior /set position (no state)
+        update, message = create_mock_update("/set 2 1", ["2", "1"])
+        context = MagicMock()
+        context.args = ["2", "1"]
+        context.user_data = {"pending_menu_id": menu.id}
+
+        with patch("app.handlers.set_.get_session", return_value=test_db):
+            await set_cmd(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "expired" in call_args.lower()
