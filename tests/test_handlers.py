@@ -188,6 +188,91 @@ class TestListHandler:
 
 
 @pytest.mark.asyncio
+class TestHistoryHandler:
+    async def test_history_no_args_defaults_to_1(self, test_db, seed_recipes):
+        """Test /history with no args shows last 1 menu (default)."""
+        from app.handlers.history import history
+        from app.services.menu_service import MenuService
+
+        # Create and accept 3 menus
+        menu_service = MenuService(test_db)
+        for _ in range(3):
+            menu = menu_service.generate_week()
+            menu_service.accept_menu(menu.id)
+
+        update, message = create_mock_update("/history", [])
+        context = MagicMock()
+        context.args = []
+        context.user_data = {}
+
+        with patch("app.handlers.history.get_session", return_value=test_db):
+            await history(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        # Should show "Menu #1" only (last 1)
+        assert "Menu #1" in call_args
+        assert "Menu #2" not in call_args
+
+    async def test_history_with_number_arg(self, test_db, seed_recipes):
+        """Test /history <n> shows last n menus."""
+        from app.handlers.history import history
+        from app.services.menu_service import MenuService
+
+        # Create and accept 3 menus
+        menu_service = MenuService(test_db)
+        for _ in range(3):
+            menu = menu_service.generate_week()
+            menu_service.accept_menu(menu.id)
+
+        update, message = create_mock_update("/history 2", ["2"])
+        context = MagicMock()
+        context.args = ["2"]
+        context.user_data = {}
+
+        with patch("app.handlers.history.get_session", return_value=test_db):
+            await history(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        # Should show "Menu #1" and "Menu #2" (last 2)
+        assert "Menu #1" in call_args
+        assert "Menu #2" in call_args
+
+    async def test_history_invalid_number(self, test_db):
+        """Test /history with invalid number shows error."""
+        from app.handlers.history import history
+
+        update, message = create_mock_update("/history invalid", ["invalid"])
+        context = MagicMock()
+        context.args = ["invalid"]
+        context.user_data = {}
+
+        with patch("app.handlers.history.get_session", return_value=test_db):
+            await history(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "valid number" in call_args.lower()
+
+    async def test_history_negative_number(self, test_db):
+        """Test /history with negative number shows error."""
+        from app.handlers.history import history
+
+        update, message = create_mock_update("/history -1", ["-1"])
+        context = MagicMock()
+        context.args = ["-1"]
+        context.user_data = {}
+
+        with patch("app.handlers.history.get_session", return_value=test_db):
+            await history(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "positive" in call_args.lower()
+
+
+@pytest.mark.asyncio
 class TestExternalHandler:
     async def test_external_single_command(self, test_db, seed_recipes):
         """Test /external with single ingredient."""

@@ -9,7 +9,7 @@ MENU:
 /roll - Genera nuovo menu settimanale
 /reroll - Rigenera piatti (es: /reroll 3 oppure /reroll 1 2 4)
 /accept - Accetta menu e salvalo
-/history - Vedi menu accettati
+/history - Vedi ultimo menu accettato (es: /history 3 per gli ultimi 3)
 
 RICETTE:
 /list - Vedi ricette
@@ -18,7 +18,8 @@ RICETTE:
 /edit - Modifica ricetta (es: /edit "Pasta Carbonara")
 
 SHOPPING:
-/remember - Aggiungi articoli da comprare (es: /remember olio d'oliva, caffè)
+/remember - Vedi/aggiungi articoli da comprare (es: /remember olio d'oliva, caffè)
+/bought - Segna articoli come comprati e ripristina ricette
 
 INGREDIENTI ESTERNI:
 /external - Marca ingredienti da comprare altrove

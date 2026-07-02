@@ -8,11 +8,27 @@ from app.utils.formatting import format_menu
 
 
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /history command - show recent accepted menus."""
+    """Handle /history command - show recent accepted menus.
+    Usage: /history (last 1 menu) or /history <n> (last n menus)
+    """
     session = get_session()
     try:
+        # Parse optional argument
+        limit = 1
+        if context.args:
+            try:
+                limit = int(context.args[0])
+                if limit < 1:
+                    await update.message.reply_text("Please provide a positive number.")
+                    return
+                # Cap at 10 to avoid excessive output
+                limit = min(limit, 10)
+            except ValueError:
+                await update.message.reply_text("Please provide a valid number.")
+                return
+
         menu_service = MenuService(session)
-        menus = menu_service.get_recent_accepted_menus(limit=5)
+        menus = menu_service.get_recent_accepted_menus(limit=limit)
 
         if not menus:
             await update.message.reply_text(
