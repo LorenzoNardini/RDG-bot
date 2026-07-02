@@ -20,7 +20,7 @@ from app.handlers.fill_missing import fill_missing
 from app.handlers.ingredients import ingredients_cmd
 from app.handlers.remember import remember
 from app.handlers.bought import bought
-from app.handlers.set_ import set_cmd
+from app.handlers.set_ import set_cmd, get_set_number_handler
 from app.handlers.edit import get_edit_handler
 
 # Set up logging
@@ -109,6 +109,9 @@ def main():
     app.add_handler(CommandHandler("ingredients", ingredients_cmd))
     app.add_handler(CommandHandler("remember", remember))
     app.add_handler(CommandHandler("bought", bought))
+
+    # Register /set number input handler (must come before conversation handlers)
+    app.add_handler(get_set_number_handler())
 
     # Register conversation handlers
     app.add_handler(get_add_handler())

@@ -1,11 +1,73 @@
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, MessageHandler, filters
 from app.database.db import get_session
 from app.services.menu_service import MenuService
 from app.services.recipe_service import RecipeService
 from app.utils.formatting import format_menu, format_recipe_selection, format_category_selection
 
 CATEGORIES = ["carne rossa", "carne bianca", "pesce", "uova", "legumi", "altro"]
+
+
+async def set_number_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handle plain number input after /set command.
+    Allows user to just type a number instead of /set <position> <number>.
+    """
+    session = get_session()
+    try:
+        # Check if there's a pending selection state
+        set_selection = context.user_data.get("set_selection", {})
+        if not set_selection:
+            # No pending selection, ignore
+            return
+
+        pending_menu_id = context.user_data.get("pending_menu_id")
+        if not pending_menu_id:
+            # No pending menu, ignore
+            return
+
+        # Parse the message as a number
+        try:
+            number = int(update.message.text.strip())
+        except ValueError:
+            # Not a pure number, ignore
+            return
+
+        position = set_selection.get("position")
+        category_number = set_selection.get("category_number")
+
+        # Route based on current state
+        if position is None:
+            # Should not happen, but safety check
+            return
+
+        if position == 7 and category_number is None:
+            # User is at stage: /set 7 → just typed a number (category selection)
+            await _show_recipes_for_category_7(session, update, context, pending_menu_id, str(number))
+            return
+
+        if position == 7 and category_number is not None:
+            # User is at stage: /set 7 2 → just typed a number (recipe selection for position 7)
+            await _set_recipe_for_position_7(
+                session, update, context, pending_menu_id, str(category_number), str(number)
+            )
+            return
+
+        if position >= 1 and position <= 6:
+            # User is at stage: /set <position> → just typed a number (recipe selection for position 1-6)
+            await _set_recipe_for_position(session, update, context, pending_menu_id, position, str(number))
+            return
+
+    finally:
+        session.close()
+
+
+def get_set_number_handler():
+    """Return a MessageHandler for plain number input during /set flow."""
+    return MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        set_number_input
+    )
 
 
 async def set_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -605,3 +605,90 @@ class TestSetHandler:
         message.reply_text.assert_called()
         call_args = message.reply_text.call_args[0][0]
         assert "expired" in call_args.lower()
+
+    async def test_set_number_input_for_recipe_selection(self, test_db, seed_recipes):
+        """Test plain number input instead of /set <position> <number>."""
+        from app.handlers.set_ import set_number_input
+        from app.services.menu_service import MenuService
+        from app.services.recipe_service import RecipeService
+
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+        menu_id = menu.id
+
+        # Set up state as if user had called /set 2
+        items = menu_service.get_menu_items(menu_id)
+        pos2_item = items[1]
+        category = pos2_item.recipe.category
+
+        recipe_service = RecipeService(test_db)
+        recipes = recipe_service.get_by_category(category)
+        sorted_recipes = sorted(recipes, key=lambda r: r.name)
+        choices = {i: r.id for i, r in enumerate(sorted_recipes, 1)}
+
+        # Create update with just a number
+        update, message = create_mock_update("1", [])
+        update.message.text = "1"
+        context = MagicMock()
+        context.args = []
+        context.user_data = {
+            "pending_menu_id": menu_id,
+            "set_selection": {
+                "position": 2,
+                "category": category,
+                "choices": choices,
+            }
+        }
+
+        with patch("app.handlers.set_.get_session", return_value=test_db):
+            await set_number_input(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "updated" in call_args.lower()
+
+    async def test_set_number_input_for_category_selection(self, test_db, seed_recipes):
+        """Test plain number input for category selection (/set 7)."""
+        from app.handlers.set_ import set_number_input
+        from app.services.menu_service import MenuService
+
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+
+        # Set up state as if user had called /set 7
+        update, message = create_mock_update("2", [])
+        update.message.text = "2"
+        context = MagicMock()
+        context.args = []
+        context.user_data = {
+            "pending_menu_id": menu.id,
+            "set_selection": {"position": 7}
+        }
+
+        with patch("app.handlers.set_.get_session", return_value=test_db):
+            await set_number_input(update, context)
+
+        message.reply_text.assert_called()
+        # Should show recipes for carne bianca (category 2)
+        call_args = message.reply_text.call_args[0][0]
+        assert "recipe" in call_args.lower()
+
+    async def test_set_number_input_ignores_non_numbers(self, test_db):
+        """Test that non-number text is ignored."""
+        from app.handlers.set_ import set_number_input
+
+        # Create update with non-number text
+        update, message = create_mock_update("hello", [])
+        update.message.text = "hello"
+        context = MagicMock()
+        context.args = []
+        context.user_data = {
+            "pending_menu_id": 123,
+            "set_selection": {"position": 2}
+        }
+
+        with patch("app.handlers.set_.get_session", return_value=test_db):
+            await set_number_input(update, context)
+
+        # Should not send any message (ignored)
+        message.reply_text.assert_not_called()
