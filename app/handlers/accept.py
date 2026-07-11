@@ -73,8 +73,6 @@ async def accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if external_items or reminders:
             summary = format_shopping_summary(external_items, reminders)
             await update.message.reply_text(summary, parse_mode="Markdown")
-            # Clear reminders after displaying them
-            shopping_service.clear_reminders()
 
         # Check for recipes needing external ingredient enrichment
         unknown_recipes = external_service.get_recipes_needing_enrichment(recipe_ids)
