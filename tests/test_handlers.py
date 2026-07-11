@@ -692,3 +692,133 @@ class TestSetHandler:
 
         # Should not send any message (ignored)
         message.reply_text.assert_not_called()
+
+
+@pytest.mark.asyncio
+class TestRemindersPersisteAcrossAccept:
+    """Test that /remember items persist across /accept, NOT removed."""
+
+    async def test_remember_items_survive_accept(self, test_db, seed_recipes):
+        """Verify /remember items are NOT cleared when accepting a menu."""
+        from app.handlers.remember import remember
+        from app.handlers.accept import accept
+        from app.services.menu_service import MenuService
+        from app.services.shopping_service import ShoppingReminderService
+
+        # Add reminders via /remember
+        update, message = create_mock_update("/remember coffee, batteries", ["coffee,", "batteries"])
+        context = MagicMock()
+        context.args = ["coffee,", "batteries"]
+        context.user_data = {}
+
+        with patch("app.handlers.remember.get_session", return_value=test_db):
+            await remember(update, context)
+
+        # Verify reminders exist
+        shopping_service = ShoppingReminderService(test_db)
+        reminders_before = shopping_service.get_active_reminders()
+        assert len(reminders_before) == 2
+        assert "coffee" in reminders_before
+        assert "batteries" in reminders_before
+
+        # Accept a menu
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+
+        update, message = create_mock_update("/accept", [])
+        context.user_data = {"pending_menu_id": menu.id}
+        context.args = []
+
+        with patch("app.handlers.accept.get_session", return_value=test_db):
+            await accept(update, context)
+
+        # Verify reminders STILL EXIST after /accept
+        reminders_after = shopping_service.get_active_reminders()
+        assert len(reminders_after) == 2, "Reminders should NOT be cleared by /accept"
+        assert "coffee" in reminders_after
+        assert "batteries" in reminders_after
+
+
+@pytest.mark.asyncio
+class TestRemindersWorkflow:
+    """Test the complete workflow: /remember items persist across /accept, only cleared by /bought."""
+
+    async def test_reminders_persist_across_multiple_accepts(self, test_db, seed_recipes):
+        """
+        Verify the intended workflow:
+        1. Add reminders via /remember
+        2. Accept menu 1
+        3. Reminders still exist
+        4. Accept menu 2
+        5. Reminders still exist
+        6. Use /bought
+        7. Reminders are cleared
+        """
+        from app.handlers.accept import accept
+        from app.handlers.remember import remember
+        from app.handlers.bought import bought
+        from app.services.menu_service import MenuService
+        from app.services.shopping_service import ShoppingReminderService
+
+        # Step 1: Add reminders
+        update, message = create_mock_update("/remember coffee, batteries", ["coffee,", "batteries"])
+        context = MagicMock()
+        context.args = ["coffee,", "batteries"]
+        context.user_data = {}
+
+        with patch("app.handlers.remember.get_session", return_value=test_db):
+            await remember(update, context)
+
+        # Verify reminders added
+        shopping_service = ShoppingReminderService(test_db)
+        reminders = shopping_service.get_active_reminders()
+        assert len(reminders) == 2
+        assert "coffee" in reminders
+        assert "batteries" in reminders
+
+        # Step 2: Generate and accept first menu
+        menu_service = MenuService(test_db)
+        menu1 = menu_service.generate_week()
+        menu1_id = menu1.id
+
+        update, message = create_mock_update("/accept", [])
+        context.user_data = {"pending_menu_id": menu1_id}
+        context.args = []
+
+        with patch("app.handlers.accept.get_session", return_value=test_db):
+            await accept(update, context)
+
+        # Step 3: Verify reminders still exist after first accept
+        reminders = shopping_service.get_active_reminders()
+        assert len(reminders) == 2, "Reminders should persist after /accept"
+        assert "coffee" in reminders
+        assert "batteries" in reminders
+
+        # Step 4: Generate and accept second menu
+        menu2 = menu_service.generate_week()
+        menu2_id = menu2.id
+
+        update, message = create_mock_update("/accept", [])
+        context.user_data = {"pending_menu_id": menu2_id}
+        context.args = []
+
+        with patch("app.handlers.accept.get_session", return_value=test_db):
+            await accept(update, context)
+
+        # Step 5: Verify reminders still exist after second accept
+        reminders = shopping_service.get_active_reminders()
+        assert len(reminders) == 2, "Reminders should persist after second /accept"
+        assert "coffee" in reminders
+        assert "batteries" in reminders
+
+        # Step 6: Use /bought to clear everything
+        update, message = create_mock_update("/bought", [])
+        context.user_data = {}
+        context.args = []
+
+        with patch("app.handlers.bought.get_session", return_value=test_db):
+            await bought(update, context)
+
+        # Step 7: Verify reminders are cleared only by /bought
+        reminders = shopping_service.get_active_reminders()
+        assert len(reminders) == 0, "Reminders should only be cleared by /bought"
