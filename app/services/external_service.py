@@ -32,8 +32,9 @@ class ExternalIngredientService:
             )
             self.session.add(ext_ing)
 
-        # Update status
+        # Update status - explicit flush before commit to ensure updates
         recipe.external_status = "defined"
+        self.session.flush()  # Ensure all pending updates are persisted
         self.session.commit()
         return True
 
@@ -48,8 +49,9 @@ class ExternalIngredientService:
             ExternalIngredient.recipe_id == recipe_id
         ).delete()
 
-        # Update status
+        # Update status - explicit flush before commit to ensure updates
         recipe.external_status = "none"
+        self.session.flush()  # Ensure all pending updates are persisted
         self.session.commit()
         return True
 
