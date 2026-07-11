@@ -870,3 +870,98 @@ class TestRemindersWorkflow:
         # Step 7: Verify reminders are cleared only by /bought
         reminders = shopping_service.get_active_reminders()
         assert len(reminders) == 0, "Reminders should only be cleared by /bought"
+
+
+@pytest.mark.asyncio
+class TestDiagnoseHandler:
+    """Test /diagnose command for identifying out-of-sync external ingredients."""
+
+    async def test_diagnose_no_external_ingredients(self, test_db, seed_recipes):
+        """Test /diagnose when no external ingredients exist."""
+        from app.handlers.diagnose import diagnose_external
+
+        update, message = create_mock_update("/diagnose", [])
+        context = MagicMock()
+        context.args = []
+
+        with patch("app.handlers.diagnose.get_session", return_value=test_db):
+            await diagnose_external(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "No external ingredients found" in call_args
+
+    async def test_diagnose_shows_synced_recipes(self, test_db, seed_recipes):
+        """Test /diagnose shows recipes with synced status."""
+        from app.handlers.diagnose import diagnose_external
+        from app.services.external_service import ExternalIngredientService
+
+        # Add external ingredients that match the status
+        external_service = ExternalIngredientService(test_db)
+        external_service.set_ingredients(seed_recipes[0].id, ["flour", "butter"])
+
+        update, message = create_mock_update("/diagnose", [])
+        context = MagicMock()
+        context.args = []
+
+        with patch("app.handlers.diagnose.get_session", return_value=test_db):
+            await diagnose_external(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "[OK]" in call_args  # Should show synced recipes
+        assert "Pasta Carbonara" in call_args
+
+    async def test_diagnose_shows_mismatched_recipes(self, test_db, seed_recipes):
+        """Test /diagnose identifies recipes with out-of-sync status."""
+        from app.handlers.diagnose import diagnose_external
+        from app.models.models import ExternalIngredient
+
+        # Manually add ingredients but don't update status
+        test_db.add(ExternalIngredient(recipe_id=seed_recipes[1].id, ingredient_name="spaghetti"))
+        test_db.commit()
+
+        # Manually verify the status is NOT "defined" (should be "unknown")
+        assert seed_recipes[1].external_status != "defined"
+
+        update, message = create_mock_update("/diagnose", [])
+        context = MagicMock()
+        context.args = []
+
+        with patch("app.handlers.diagnose.get_session", return_value=test_db):
+            await diagnose_external(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "[ACTION NEEDED]" in call_args  # Should flag mismatches
+        assert "Spaghetti Aglio Olio" in call_args
+        assert "TO FIX:" in call_args
+
+    async def test_diagnose_shows_both_synced_and_mismatched(self, test_db, seed_recipes):
+        """Test /diagnose with both synced and mismatched recipes."""
+        from app.handlers.diagnose import diagnose_external
+        from app.services.external_service import ExternalIngredientService
+        from app.models.models import ExternalIngredient
+
+        # Add one properly synced recipe
+        external_service = ExternalIngredientService(test_db)
+        external_service.set_ingredients(seed_recipes[0].id, ["flour"])
+
+        # Add one with mismatched data (ingredients exist but status is wrong)
+        test_db.add(ExternalIngredient(recipe_id=seed_recipes[1].id, ingredient_name="spaghetti"))
+        test_db.commit()
+
+        update, message = create_mock_update("/diagnose", [])
+        context = MagicMock()
+        context.args = []
+
+        with patch("app.handlers.diagnose.get_session", return_value=test_db):
+            await diagnose_external(update, context)
+
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        # Should show both sections
+        assert "[OK]" in call_args
+        assert "[ACTION NEEDED]" in call_args
+        assert "Pasta Carbonara" in call_args  # Synced
+        assert "Spaghetti Aglio Olio" in call_args  # Mismatched

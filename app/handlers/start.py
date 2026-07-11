@@ -34,6 +34,7 @@ INGREDIENTI ESTERNI:
 /noexternal - Nessun ingrediente esterno (es: /noexternal 2 oppure /noexternal 1 2 4)
 /fill_missing - Mostra ricette mancanti e riempi una alla volta
 /skip - Ignora richiesta ingredienti
+/diagnose - Vedi quali ricette hanno ingredienti da riempire
 
 WORKFLOW:
 1. /roll
