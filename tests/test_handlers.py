@@ -695,6 +695,54 @@ class TestSetHandler:
 
 
 @pytest.mark.asyncio
+class TestNoExternalPersistence:
+    """Test that /noexternal saves to database correctly."""
+
+    async def test_noexternal_marks_recipe_in_database(self, test_db, seed_recipes):
+        """Verify /noexternal actually saves to the database."""
+        from app.handlers.accept import accept
+        from app.handlers.external import noexternal_cmd
+        from app.services.menu_service import MenuService
+        from app.services.external_service import ExternalIngredientService
+
+        # Generate and accept a menu to start enrichment
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+
+        update, message = create_mock_update("/accept", [])
+        context = MagicMock()
+        context.args = []
+        context.user_data = {"pending_menu_id": menu.id}
+
+        with patch("app.handlers.accept.get_session", return_value=test_db):
+            await accept(update, context)
+
+        # At this point, enrichment_recipes should be populated in context
+        assert "enrichment_recipes" in context.user_data
+        enrichment_recipes = context.user_data["enrichment_recipes"]
+
+        if not enrichment_recipes:
+            # If no recipes need enrichment, skip (all already marked)
+            return
+
+        # Get the first recipe to mark
+        first_position = list(enrichment_recipes.keys())[0]
+        recipe_id = enrichment_recipes[first_position]
+
+        # Use /noexternal to mark it
+        update, message = create_mock_update(f"/noexternal {first_position}", [str(first_position)])
+        context.args = [str(first_position)]
+
+        with patch("app.handlers.external.get_session", return_value=test_db):
+            await noexternal_cmd(update, context)
+
+        # Verify it was marked in the database
+        external_service = ExternalIngredientService(test_db)
+        status = external_service.get_status(recipe_id)
+        assert status == "none", f"Expected 'none' but got '{status}' - data not persisted to DB!"
+
+
+@pytest.mark.asyncio
 class TestRemindersPersisteAcrossAccept:
     """Test that /remember items persist across /accept, NOT removed."""
 
