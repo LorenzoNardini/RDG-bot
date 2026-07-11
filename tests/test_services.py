@@ -599,3 +599,56 @@ class TestSetCommand:
         result = service.replace_position_with_recipe(menu_id, 2, recipe_id)
         assert result["success"] is False
         assert "accepted" in result["error"]
+
+
+class TestExternalIngredientPersistence:
+    """Test that external ingredient status is properly persisted to database."""
+
+    def test_set_ingredients_persists_status_to_database(self, test_db, seed_recipes):
+        """Verify set_ingredients updates Recipe.external_status in database."""
+        service = ExternalIngredientService(test_db)
+        recipe_id = seed_recipes[0].id
+
+        # Verify initial status
+        assert service.get_status(recipe_id) == "unknown"
+
+        # Set ingredients
+        ingredients = ["salmon", "dill"]
+        service.set_ingredients(recipe_id, ingredients)
+
+        # Query fresh to verify persistence
+        fresh_status = service.get_status(recipe_id)
+        assert fresh_status == "defined", \
+            "Recipe.external_status should be persisted as 'defined'"
+
+        # Verify ingredients were saved
+        saved_ingredients = service.get_ingredients(recipe_id)
+        assert set(saved_ingredients) == set(ingredients)
+
+    def test_set_no_external_persists_status_to_database(self, test_db, seed_recipes):
+        """Verify set_no_external updates Recipe.external_status in database."""
+        service = ExternalIngredientService(test_db)
+        recipe_id = seed_recipes[1].id
+
+        # Verify initial status
+        assert service.get_status(recipe_id) == "unknown"
+
+        # Mark as no external
+        service.set_no_external(recipe_id)
+
+        # Query fresh to verify persistence
+        fresh_status = service.get_status(recipe_id)
+        assert fresh_status == "none", \
+            "Recipe.external_status should be persisted as 'none'"
+
+    def test_external_status_queryable_after_set(self, test_db, seed_recipes):
+        """Verify external status is immediately queryable after set_ingredients."""
+        service = ExternalIngredientService(test_db)
+        recipe_id = seed_recipes[2].id
+
+        # Set ingredients
+        service.set_ingredients(recipe_id, ["jackfruit"])
+
+        # Query using get_status (which does a fresh query)
+        status = service.get_status(recipe_id)
+        assert status == "defined", "Status should be queryable and correct after set_ingredients"
