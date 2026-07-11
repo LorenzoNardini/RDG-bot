@@ -22,6 +22,7 @@ from app.handlers.remember import remember
 from app.handlers.bought import bought
 from app.handlers.set_ import set_cmd, get_set_number_handler
 from app.handlers.edit import get_edit_handler
+from app.handlers.dbstatus import dbstatus
 
 # Set up logging
 logging.basicConfig(
@@ -109,6 +110,7 @@ def main():
     app.add_handler(CommandHandler("ingredients", ingredients_cmd))
     app.add_handler(CommandHandler("remember", remember))
     app.add_handler(CommandHandler("bought", bought))
+    app.add_handler(CommandHandler("dbstatus", dbstatus))
 
     # Register /set number input handler (must come before conversation handlers)
     app.add_handler(get_set_number_handler())
