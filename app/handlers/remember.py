@@ -15,18 +15,25 @@ async def remember(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     session = get_session()
     try:
+        from app.services.menu_service import MenuService
+
+        menu_service = MenuService(session)
+        shopping_service = ShoppingReminderService(session)
+        external_service = ExternalIngredientService(session)
+
+        # Get the most recent accepted menu
+        recent_menus = menu_service.get_recent_accepted_menus(limit=1)
+        current_menu_id = recent_menus[0].id if recent_menus else None
+
         # If no args, just show the current list
         if not context.args:
-            shopping_service = ShoppingReminderService(session)
-            external_service = ExternalIngredientService(session)
-
-            # Collect all recipe external ingredients
+            # Collect external ingredients only from current menu's recipes
             recipe_ingredients = []
-            from app.models.models import Recipe
-            recipes = session.query(Recipe).all()
-            for recipe in recipes:
-                if external_service.get_status(recipe.id) == "defined":
-                    recipe_ingredients.extend(external_service.get_ingredients(recipe.id))
+            if current_menu_id:
+                items = menu_service.get_menu_items(current_menu_id)
+                for item in items:
+                    if external_service.get_status(item.recipe_id) == "defined":
+                        recipe_ingredients.extend(external_service.get_ingredients(item.recipe_id))
 
             # Get reminders
             reminders = shopping_service.get_active_reminders()
@@ -48,17 +55,15 @@ async def remember(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Add reminders
-        shopping_service = ShoppingReminderService(session)
         added = shopping_service.add_reminders(items)
 
-        # Get updated consolidated list
-        external_service = ExternalIngredientService(session)
+        # Get updated consolidated list (only from current menu)
         recipe_ingredients = []
-        from app.models.models import Recipe
-        recipes = session.query(Recipe).all()
-        for recipe in recipes:
-            if external_service.get_status(recipe.id) == "defined":
-                recipe_ingredients.extend(external_service.get_ingredients(recipe.id))
+        if current_menu_id:
+            items = menu_service.get_menu_items(current_menu_id)
+            for item in items:
+                if external_service.get_status(item.recipe_id) == "defined":
+                    recipe_ingredients.extend(external_service.get_ingredients(item.recipe_id))
 
         reminders = shopping_service.get_active_reminders()
         consolidated = recipe_ingredients + reminders

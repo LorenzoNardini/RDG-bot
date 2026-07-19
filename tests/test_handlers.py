@@ -77,7 +77,7 @@ class TestRememberHandler:
         message.reply_text.assert_called()
         call_args = message.reply_text.call_args[0][0]
         assert "🛒" in call_args
-        assert "Remember to buy" in call_args or "remember to buy" in call_args.lower()
+        assert "Lista della Spesa" in call_args
 
     async def test_remember_no_items_shows_message(self, test_db):
         """Test that /remember with no items shows appropriate message."""

@@ -54,7 +54,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 text += menu_text
 
-                # Add external ingredients for this menu (only those with defined ingredients)
+                # Add shopping list for this menu (external ingredients + reminders from current menu)
                 external_items = []
                 for item in items:
                     # Ensure recipe is loaded in current session
@@ -64,24 +64,36 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     status = external_service.get_status(recipe.id)
                     if status == "defined":
                         ingredients = external_service.get_ingredients(recipe.id)
-                        ing_text = ", ".join(ingredients)
-                        external_items.append(f"  • {recipe.name}: {ing_text}")
-
-                if external_items:
-                    text += "\n*🛒 Ingredienti Esterni:*\n"
-                    text += "\n".join(external_items) + "\n"
+                        for ing in ingredients:
+                            external_items.append(ing)
 
                 text += "\n---\n\n"
 
-            # Add current shopping reminders
+            # Add unified shopping list (external ingredients from all menus + current reminders)
+            # Only show reminders once, after all menus
+            all_external_items = []
+            for menu in menus:
+                items = menu_service.get_menu_items(menu.id)
+                for item in items:
+                    if item.recipe is None:
+                        continue
+                    recipe = item.recipe
+                    status = external_service.get_status(recipe.id)
+                    if status == "defined":
+                        ingredients = external_service.get_ingredients(recipe.id)
+                        all_external_items.extend(ingredients)
+
             reminders = shopping_service.get_active_reminders()
-            if reminders:
-                text += "\n*📝 Promemoria Attuali:*\n"
-                for item in reminders:
+            all_shopping_items = all_external_items + reminders
+
+            # Show unified shopping list
+            if all_shopping_items:
+                text += "*🛒 Lista della Spesa:*\n"
+                for item in all_shopping_items:
                     text += f"  • {item}\n"
-                text += "\nPuoi aggiungere altri articoli con `/remember`\n"
+                text += "\nPuoi aggiungere altri articoli con `/remember` o segnare come comprati con `/bought`\n"
             else:
-                text += "\n_Nessun promemoria attivo. Usa `/remember` per aggiungere articoli da comprare._\n"
+                text += "_Lista della spesa vuota. Usa `/remember` per aggiungere articoli da comprare._\n"
 
             await update.message.reply_text(text)
 

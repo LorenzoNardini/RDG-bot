@@ -2,13 +2,14 @@ from app.models.models import WeeklyMenu, WeeklyMenuItem, Recipe
 
 
 def format_consolidated_shopping_list(items: list[str]) -> str:
-    """Format a consolidated shopping list (recipes + reminders combined)."""
+    """Format a unified shopping list (external ingredients + reminders combined)."""
     if not items:
-        return "🛒 Remember to buy:\n  (nothing right now)"
+        return "*🛒 Lista della Spesa:*\n_(vuota)_\n\nUsa `/remember` per aggiungere articoli da comprare."
 
-    lines = ["🛒 Remember to buy:"]
+    lines = ["*🛒 Lista della Spesa:*"]
     for item in sorted(set(items)):  # Deduplicate and sort
         lines.append(f"  • {item}")
+    lines.append("\nUsa `/remember` per aggiungere altri articoli.")
 
     return "\n".join(lines)
 

@@ -48,7 +48,7 @@ class TestFormattingFunctions:
         result = format_consolidated_shopping_list(items)
 
         assert "🛒" in result
-        assert "Remember to buy" in result
+        assert "Lista della Spesa" in result
         assert "salmon fillet" in result
         assert "dill" in result
         assert "olive oil" in result
