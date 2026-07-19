@@ -138,6 +138,45 @@ class TestBoughtHandler:
         # Should indicate items were marked as bought
         assert "bought" in call_args.lower() or "cleared" in call_args.lower()
 
+    async def test_bought_preserves_external_ingredients(self, test_db, seed_recipes):
+        """Test that /bought clears reminders but preserves external ingredient status."""
+        from app.handlers.bought import bought
+        from app.services.shopping_service import ShoppingReminderService
+        from app.services.external_service import ExternalIngredientService
+
+        # Setup: add external ingredients and reminders
+        external_service = ExternalIngredientService(test_db)
+        recipe_id_1 = seed_recipes[0].id
+        recipe_id_2 = seed_recipes[1].id
+
+        external_service.set_ingredients(recipe_id_1, ["flour", "butter"])
+        external_service.set_no_external(recipe_id_2)
+
+        shopping_service = ShoppingReminderService(test_db)
+        shopping_service.add_reminders(["olive oil", "coffee"])
+
+        # Verify setup
+        assert external_service.get_status(recipe_id_1) == "defined"
+        assert external_service.get_status(recipe_id_2) == "none"
+        assert shopping_service.count_active() == 2
+
+        # Run /bought
+        update, message = create_mock_update("/bought", [])
+        context = MagicMock()
+        context.args = []
+        context.user_data = {}
+
+        with patch("app.handlers.bought.get_session", return_value=test_db):
+            await bought(update, context)
+
+        # Verify reminders are cleared
+        assert shopping_service.count_active() == 0
+
+        # CRITICAL: Verify external ingredient status is NOT cleared
+        assert external_service.get_status(recipe_id_1) == "defined"
+        assert external_service.get_status(recipe_id_2) == "none"
+        message.reply_text.assert_called()
+
 
 @pytest.mark.asyncio
 class TestListHandler:
