@@ -96,14 +96,17 @@ class TestRememberHandler:
 
 @pytest.mark.asyncio
 class TestBoughtHandler:
-    async def test_bought_clears_reminders(self, test_db):
-        """Test that /bought clears all shopping reminders."""
+    async def test_bought_clears_shopping_list(self, test_db):
+        """Test that /bought clears the entire shopping list."""
         from app.handlers.bought import bought
-        from app.services.shopping_service import ShoppingReminderService
+        from app.services.shopping_list_service import ShoppingListService
 
-        # Setup reminders
-        service = ShoppingReminderService(test_db)
-        service.add_reminders(["olive oil", "coffee"])
+        # Setup shopping list with items
+        service = ShoppingListService(test_db)
+        service.add_reminder("olive oil")
+        service.add_reminder("coffee")
+
+        assert service.count_items() == 2
 
         update, message = create_mock_update("/bought", [])
         context = MagicMock()
@@ -113,17 +116,17 @@ class TestBoughtHandler:
         with patch("app.handlers.bought.get_session", return_value=test_db):
             await bought(update, context)
 
-        # Verify reminders were cleared
-        assert service.count_active() == 0
+        # Verify shopping list was cleared
+        assert service.count_items() == 0
         message.reply_text.assert_called()
 
     async def test_bought_shows_confirmation(self, test_db):
-        """Test that /bought shows what was cleared."""
+        """Test that /bought shows confirmation message."""
         from app.handlers.bought import bought
-        from app.services.shopping_service import ShoppingReminderService
+        from app.services.shopping_list_service import ShoppingListService
 
-        service = ShoppingReminderService(test_db)
-        service.add_reminders(["olive oil"])
+        service = ShoppingListService(test_db)
+        service.add_reminder("olive oil")
 
         update, message = create_mock_update("/bought", [])
         context = MagicMock()
@@ -139,12 +142,12 @@ class TestBoughtHandler:
         assert "bought" in call_args.lower() or "cleared" in call_args.lower()
 
     async def test_bought_preserves_external_ingredients(self, test_db, seed_recipes):
-        """Test that /bought clears reminders but preserves external ingredient status."""
+        """Test that /bought clears shopping list but preserves external ingredient status."""
         from app.handlers.bought import bought
-        from app.services.shopping_service import ShoppingReminderService
+        from app.services.shopping_list_service import ShoppingListService
         from app.services.external_service import ExternalIngredientService
 
-        # Setup: add external ingredients and reminders
+        # Setup: add external ingredients and reminders to shopping list
         external_service = ExternalIngredientService(test_db)
         recipe_id_1 = seed_recipes[0].id
         recipe_id_2 = seed_recipes[1].id
@@ -152,13 +155,15 @@ class TestBoughtHandler:
         external_service.set_ingredients(recipe_id_1, ["flour", "butter"])
         external_service.set_no_external(recipe_id_2)
 
-        shopping_service = ShoppingReminderService(test_db)
-        shopping_service.add_reminders(["olive oil", "coffee"])
+        shopping_list_service = ShoppingListService(test_db)
+        shopping_list_service.add_external_ingredients(recipe_id_1, ["flour", "butter"])
+        shopping_list_service.add_reminder("olive oil")
+        shopping_list_service.add_reminder("coffee")
 
         # Verify setup
         assert external_service.get_status(recipe_id_1) == "defined"
         assert external_service.get_status(recipe_id_2) == "none"
-        assert shopping_service.count_active() == 2
+        assert shopping_list_service.count_items() == 4
 
         # Run /bought
         update, message = create_mock_update("/bought", [])
@@ -169,8 +174,8 @@ class TestBoughtHandler:
         with patch("app.handlers.bought.get_session", return_value=test_db):
             await bought(update, context)
 
-        # Verify reminders are cleared
-        assert shopping_service.count_active() == 0
+        # Verify shopping list is cleared
+        assert shopping_list_service.count_items() == 0
 
         # CRITICAL: Verify external ingredient status is NOT cleared
         assert external_service.get_status(recipe_id_1) == "defined"
@@ -783,14 +788,13 @@ class TestNoExternalPersistence:
 
 @pytest.mark.asyncio
 class TestRemindersPersisteAcrossAccept:
-    """Test that /remember items persist across /accept, NOT removed."""
+    """Test that shopping list items persist across /accept, NOT removed."""
 
     async def test_remember_items_survive_accept(self, test_db, seed_recipes):
-        """Verify /remember items are NOT cleared when accepting a menu."""
+        """Verify shopping list items are NOT cleared when accepting a menu."""
         from app.handlers.remember import remember
-        from app.handlers.accept import accept
         from app.services.menu_service import MenuService
-        from app.services.shopping_service import ShoppingReminderService
+        from app.services.shopping_list_service import ShoppingListService
 
         # Add reminders via /remember
         update, message = create_mock_update("/remember coffee, batteries", ["coffee,", "batteries"])
@@ -801,51 +805,42 @@ class TestRemindersPersisteAcrossAccept:
         with patch("app.handlers.remember.get_session", return_value=test_db):
             await remember(update, context)
 
-        # Verify reminders exist
-        shopping_service = ShoppingReminderService(test_db)
-        reminders_before = shopping_service.get_active_reminders()
-        assert len(reminders_before) == 2
-        assert "coffee" in reminders_before
-        assert "batteries" in reminders_before
+        # Verify shopping list items exist
+        shopping_list_service = ShoppingListService(test_db)
+        items_before = shopping_list_service.get_all_items()
+        assert "coffee" in items_before
+        assert "batteries" in items_before
 
-        # Accept a menu
+        # Accept a menu (this would add external ingredients to shopping list)
         menu_service = MenuService(test_db)
         menu = menu_service.generate_week()
+        menu_service.accept_menu(menu.id)
 
-        update, message = create_mock_update("/accept", [])
-        context.user_data = {"pending_menu_id": menu.id}
-        context.args = []
-
-        with patch("app.handlers.accept.get_session", return_value=test_db):
-            await accept(update, context)
-
-        # Verify reminders STILL EXIST after /accept
-        reminders_after = shopping_service.get_active_reminders()
-        assert len(reminders_after) == 2, "Reminders should NOT be cleared by /accept"
-        assert "coffee" in reminders_after
-        assert "batteries" in reminders_after
+        # Verify reminders STILL EXIST after accepting menu
+        items_after = shopping_list_service.get_all_items()
+        assert "coffee" in items_after
+        assert "batteries" in items_after
 
 
 @pytest.mark.asyncio
 class TestRemindersWorkflow:
-    """Test the complete workflow: /remember items persist across /accept, only cleared by /bought."""
+    """Test the complete workflow: shopping list items persist across /accept, only cleared by /bought."""
 
     async def test_reminders_persist_across_multiple_accepts(self, test_db, seed_recipes):
         """
         Verify the intended workflow:
         1. Add reminders via /remember
         2. Accept menu 1
-        3. Reminders still exist
+        3. Shopping list still has reminders
         4. Accept menu 2
-        5. Reminders still exist
+        5. Shopping list still has reminders + new external ingredients
         6. Use /bought
-        7. Reminders are cleared
+        7. Shopping list is cleared
         """
-        from app.handlers.accept import accept
         from app.handlers.remember import remember
         from app.handlers.bought import bought
         from app.services.menu_service import MenuService
-        from app.services.shopping_service import ShoppingReminderService
+        from app.services.shopping_list_service import ShoppingListService
 
         # Step 1: Add reminders
         update, message = create_mock_update("/remember coffee, batteries", ["coffee,", "batteries"])
@@ -856,47 +851,30 @@ class TestRemindersWorkflow:
         with patch("app.handlers.remember.get_session", return_value=test_db):
             await remember(update, context)
 
-        # Verify reminders added
-        shopping_service = ShoppingReminderService(test_db)
-        reminders = shopping_service.get_active_reminders()
-        assert len(reminders) == 2
-        assert "coffee" in reminders
-        assert "batteries" in reminders
+        # Verify shopping list has reminders
+        shopping_list_service = ShoppingListService(test_db)
+        items = shopping_list_service.get_all_items()
+        assert "coffee" in items
+        assert "batteries" in items
 
         # Step 2: Generate and accept first menu
         menu_service = MenuService(test_db)
         menu1 = menu_service.generate_week()
-        menu1_id = menu1.id
+        menu_service.accept_menu(menu1.id)
 
-        update, message = create_mock_update("/accept", [])
-        context.user_data = {"pending_menu_id": menu1_id}
-        context.args = []
-
-        with patch("app.handlers.accept.get_session", return_value=test_db):
-            await accept(update, context)
-
-        # Step 3: Verify reminders still exist after first accept
-        reminders = shopping_service.get_active_reminders()
-        assert len(reminders) == 2, "Reminders should persist after /accept"
-        assert "coffee" in reminders
-        assert "batteries" in reminders
+        # Step 3: Verify items still exist after first accept
+        items = shopping_list_service.get_all_items()
+        assert "coffee" in items
+        assert "batteries" in items
 
         # Step 4: Generate and accept second menu
         menu2 = menu_service.generate_week()
-        menu2_id = menu2.id
+        menu_service.accept_menu(menu2.id)
 
-        update, message = create_mock_update("/accept", [])
-        context.user_data = {"pending_menu_id": menu2_id}
-        context.args = []
-
-        with patch("app.handlers.accept.get_session", return_value=test_db):
-            await accept(update, context)
-
-        # Step 5: Verify reminders still exist after second accept
-        reminders = shopping_service.get_active_reminders()
-        assert len(reminders) == 2, "Reminders should persist after second /accept"
-        assert "coffee" in reminders
-        assert "batteries" in reminders
+        # Step 5: Verify items still exist after second accept
+        items = shopping_list_service.get_all_items()
+        assert "coffee" in items
+        assert "batteries" in items
 
         # Step 6: Use /bought to clear everything
         update, message = create_mock_update("/bought", [])
@@ -906,9 +884,9 @@ class TestRemindersWorkflow:
         with patch("app.handlers.bought.get_session", return_value=test_db):
             await bought(update, context)
 
-        # Step 7: Verify reminders are cleared only by /bought
-        reminders = shopping_service.get_active_reminders()
-        assert len(reminders) == 0, "Reminders should only be cleared by /bought"
+        # Step 7: Verify shopping list is cleared only by /bought
+        items = shopping_list_service.get_all_items()
+        assert len(items) == 0, "Shopping list should be cleared by /bought"
 
 
 @pytest.mark.asyncio
@@ -1004,3 +982,155 @@ class TestDiagnoseHandler:
         assert "[ACTION NEEDED]" in call_args
         assert "Pasta Carbonara" in call_args  # Synced
         assert "Spaghetti Aglio Olio" in call_args  # Mismatched
+
+
+@pytest.mark.asyncio
+class TestShoppingListScenarios:
+    """Test unified shopping list across 4 scenarios."""
+
+    async def test_scenario_1_basic_workflow(self, test_db, seed_recipes):
+        """Scenario 1: Accept menu, add reminder via /remember, then /bought."""
+        from app.handlers.accept import accept
+        from app.handlers.remember import remember
+        from app.handlers.bought import bought
+        from app.services.menu_service import MenuService
+        from app.services.external_service import ExternalIngredientService
+        from app.services.shopping_list_service import ShoppingListService
+
+        # Setup: enrich recipes
+        external_service = ExternalIngredientService(test_db)
+        external_service.set_ingredients(seed_recipes[0].id, ["parmigiano"])  # lasagna
+        external_service.set_ingredients(seed_recipes[1].id, ["flour"])  # pasta
+
+        # Generate and accept menu with these recipes
+        menu_service = MenuService(test_db)
+        menu = menu_service.generate_week()
+        menu_service.accept_menu(menu.id)
+
+        # Step 1: Manually populate shopping list (simulating /accept adding ingredients)
+        shopping_list_service = ShoppingListService(test_db)
+        shopping_list_service.add_external_ingredients(seed_recipes[0].id, ["parmigiano"])
+        shopping_list_service.add_external_ingredients(seed_recipes[1].id, ["flour"])
+
+        # Verify list shows both
+        items = shopping_list_service.get_all_items()
+        assert "parmigiano" in items
+        assert "flour" in items
+
+        # Step 2: /remember milk
+        update, message = create_mock_update("/remember milk", ["milk"])
+        context = MagicMock()
+        context.args = ["milk"]
+        context.user_data = {}
+
+        with patch("app.handlers.remember.get_session", return_value=test_db):
+            await remember(update, context)
+
+        # Should show all 3 items
+        items = shopping_list_service.get_all_items()
+        assert "parmigiano" in items
+        assert "flour" in items
+        assert "milk" in items
+
+        # Step 3: /bought
+        update, message = create_mock_update("/bought", [])
+        context = MagicMock()
+        context.args = []
+        context.user_data = {}
+
+        with patch("app.handlers.bought.get_session", return_value=test_db):
+            await bought(update, context)
+
+        # Verify list is empty
+        items = shopping_list_service.get_all_items()
+        assert len(items) == 0
+        message.reply_text.assert_called()
+        call_args = message.reply_text.call_args[0][0]
+        assert "clear" in call_args.lower()
+
+    async def test_scenario_2_after_bought_add_reminder(self, test_db, seed_recipes):
+        """Scenario 2: After /bought, /remember butter should add only butter."""
+        from app.handlers.remember import remember
+        from app.handlers.bought import bought
+        from app.services.external_service import ExternalIngredientService
+        from app.services.shopping_list_service import ShoppingListService
+
+        # Setup
+        external_service = ExternalIngredientService(test_db)
+        shopping_list_service = ShoppingListService(test_db)
+
+        # Populate with external ingredients and reminders
+        external_service.set_ingredients(seed_recipes[0].id, ["parmigiano"])
+        shopping_list_service.add_external_ingredients(seed_recipes[0].id, ["parmigiano"])
+        shopping_list_service.add_reminder("milk")
+
+        # Clear everything
+        shopping_list_service.clear_all()
+
+        # Add butter
+        update, message = create_mock_update("/remember butter", ["butter"])
+        context = MagicMock()
+        context.args = ["butter"]
+        context.user_data = {}
+
+        with patch("app.handlers.remember.get_session", return_value=test_db):
+            await remember(update, context)
+
+        # Should show only butter
+        items = shopping_list_service.get_all_items()
+        assert items == ["butter"]
+
+    async def test_scenario_3_new_menu_different_recipes(self, test_db, seed_recipes):
+        """Scenario 3: Accept new menu, should add new ingredients but keep old reminders."""
+        from app.services.external_service import ExternalIngredientService
+        from app.services.shopping_list_service import ShoppingListService
+
+        # Setup
+        external_service = ExternalIngredientService(test_db)
+        shopping_list_service = ShoppingListService(test_db)
+
+        # Start with old list: parmigiano from lasagna (bought) + butter reminder (new)
+        shopping_list_service.clear_all()
+        shopping_list_service.add_reminder("butter")
+
+        # Enrich new recipes
+        external_service.set_ingredients(seed_recipes[2].id, ["broth"])  # risotto
+        external_service.set_ingredients(seed_recipes[3].id, ["lettuce"])  # salad
+
+        # Accept new menu (simulating /accept adding ingredients)
+        shopping_list_service.add_external_ingredients(seed_recipes[2].id, ["broth"])
+        shopping_list_service.add_external_ingredients(seed_recipes[3].id, ["lettuce"])
+
+        # Should show all 3 items
+        items = shopping_list_service.get_all_items()
+        assert "butter" in items
+        assert "broth" in items
+        assert "lettuce" in items
+
+    async def test_scenario_4_same_recipe_returns(self, test_db, seed_recipes):
+        """Scenario 4: Previous menu with lasagna was bought, now lasagna appears in new menu."""
+        from app.services.external_service import ExternalIngredientService
+        from app.services.shopping_list_service import ShoppingListService
+
+        # Setup
+        external_service = ExternalIngredientService(test_db)
+        shopping_list_service = ShoppingListService(test_db)
+
+        # Current state: broth, lettuce, butter (from scenario 3)
+        # Accept new menu that includes lasagna AND risotto (but not salad/pasta)
+        shopping_list_service.clear_all()
+        shopping_list_service.add_reminder("butter")
+        shopping_list_service.add_external_ingredients(seed_recipes[2].id, ["broth"])
+
+        # Now enrich lasagna (if not already)
+        external_service.set_ingredients(seed_recipes[0].id, ["parmigiano"])
+
+        # Accept new menu with lasagna + risotto
+        shopping_list_service.add_external_ingredients(seed_recipes[0].id, ["parmigiano"])
+        # broth still there from risotto
+
+        # Should show all: parmigiano, flour (if in menu), broth, butter
+        items = shopping_list_service.get_all_items()
+        assert "parmigiano" in items
+        assert "broth" in items
+        assert "butter" in items

@@ -42,6 +42,22 @@ self.session.flush()  # Ensure update is persisted
 self.session.commit()
 ```
 
+## Requirements & Clarification
+
+**Before implementing ANY new feature or behavior change:**
+1. Ask concrete scenario-based questions with specific examples
+2. Provide expected output for each scenario
+3. Walk through the full workflow (not just happy path)
+4. Get explicit confirmation before coding
+5. Never assume understanding of desired behavior
+
+Example: For shopping list behavior, ask:
+- "User accepts menu with recipes A and B. Then runs `/remember item`. What should appear?"
+- "After `/bought`, if user runs `/remember`, what shows?"
+- "When should external ingredients reappear in the list?"
+
+Mistakes happen when assumptions are made without explicit confirmation.
+
 ## Code Style
 
 - Simple, readable code over clever code

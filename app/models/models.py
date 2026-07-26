@@ -99,3 +99,17 @@ class ShoppingReminder(Base):
     def __repr__(self):
         status = "active" if self.active else "inactive"
         return f"ShoppingReminder(id={self.id}, item='{self.item_name}', status={status})"
+
+
+class ShoppingListItem(Base):
+    """Items on the active shopping list (external ingredients + reminders)."""
+    __tablename__ = "shopping_list_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_name = Column(String, nullable=False)
+    source_type = Column(String, nullable=False)  # "external_ingredient" or "reminder"
+    source_id = Column(Integer, nullable=True)  # recipe_id or reminder_id
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"ShoppingListItem(id={self.id}, item='{self.item_name}', source={self.source_type})"

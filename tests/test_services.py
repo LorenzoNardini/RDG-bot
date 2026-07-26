@@ -652,3 +652,76 @@ class TestExternalIngredientPersistence:
         # Query using get_status (which does a fresh query)
         status = service.get_status(recipe_id)
         assert status == "defined", "Status should be queryable and correct after set_ingredients"
+
+
+class TestShoppingListService:
+    """Test the unified shopping list service."""
+
+    def test_add_external_ingredients(self, test_db, seed_recipes):
+        """Test adding external ingredients from a recipe."""
+        from app.services.shopping_list_service import ShoppingListService
+
+        service = ShoppingListService(test_db)
+        recipe_id = seed_recipes[0].id
+
+        service.add_external_ingredients(recipe_id, ["flour", "butter"])
+
+        items = service.get_all_items()
+        assert "flour" in items
+        assert "butter" in items
+        assert len(items) == 2
+
+    def test_add_reminder(self, test_db):
+        """Test adding a manual reminder."""
+        from app.services.shopping_list_service import ShoppingListService
+
+        service = ShoppingListService(test_db)
+
+        service.add_reminder("milk")
+        service.add_reminder("coffee")
+
+        items = service.get_all_items()
+        assert "milk" in items
+        assert "coffee" in items
+
+    def test_get_all_items_combined(self, test_db, seed_recipes):
+        """Test getting all items (external + reminders) combined."""
+        from app.services.shopping_list_service import ShoppingListService
+
+        service = ShoppingListService(test_db)
+
+        service.add_external_ingredients(seed_recipes[0].id, ["flour"])
+        service.add_reminder("milk")
+
+        items = service.get_all_items()
+        assert "flour" in items
+        assert "milk" in items
+
+    def test_clear_all(self, test_db, seed_recipes):
+        """Test clearing entire shopping list."""
+        from app.services.shopping_list_service import ShoppingListService
+
+        service = ShoppingListService(test_db)
+
+        service.add_external_ingredients(seed_recipes[0].id, ["flour"])
+        service.add_reminder("milk")
+
+        assert service.count_items() == 2
+
+        service.clear_all()
+
+        assert service.count_items() == 0
+        assert len(service.get_all_items()) == 0
+
+    def test_deduplication(self, test_db, seed_recipes):
+        """Test that duplicate items are deduplicated."""
+        from app.services.shopping_list_service import ShoppingListService
+
+        service = ShoppingListService(test_db)
+
+        service.add_external_ingredients(seed_recipes[0].id, ["flour"])
+        service.add_reminder("flour")  # Same item from different source
+
+        items = service.get_all_items()
+        # Should have only one "flour" in the set
+        assert items.count("flour") == 1 or len([x for x in items if x == "flour"]) == 1

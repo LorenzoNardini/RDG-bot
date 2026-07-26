@@ -2,9 +2,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from app.database.db import get_session
 from app.services.menu_service import MenuService
-from app.services.external_service import ExternalIngredientService
-from app.services.shopping_service import ShoppingReminderService
-from app.utils.formatting import format_menu
+from app.services.shopping_list_service import ShoppingListService
+from app.utils.formatting import format_menu, format_consolidated_shopping_list
 
 
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -38,8 +37,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         text = "📚 *Ultimi Menu Accettati*\n\n"
-        external_service = ExternalIngredientService(session)
-        shopping_service = ShoppingReminderService(session)
+        shopping_list_service = ShoppingListService(session)
 
         try:
             for i, menu in enumerate(menus, 1):
@@ -53,43 +51,13 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 menu_text = menu_text.split("\n", 1)[1] if "\n" in menu_text else menu_text
 
                 text += menu_text
-
-                # Add shopping list for this menu (external ingredients + reminders from current menu)
-                external_items = []
-                for item in items:
-                    # Ensure recipe is loaded in current session
-                    if item.recipe is None:
-                        continue
-                    recipe = item.recipe
-                    status = external_service.get_status(recipe.id)
-                    if status == "defined":
-                        ingredients = external_service.get_ingredients(recipe.id)
-                        for ing in ingredients:
-                            external_items.append(ing)
-
                 text += "\n---\n\n"
 
-            # Add unified shopping list (external ingredients from all menus + current reminders)
-            # Only show reminders once, after all menus
-            all_external_items = []
-            for menu in menus:
-                items = menu_service.get_menu_items(menu.id)
-                for item in items:
-                    if item.recipe is None:
-                        continue
-                    recipe = item.recipe
-                    status = external_service.get_status(recipe.id)
-                    if status == "defined":
-                        ingredients = external_service.get_ingredients(recipe.id)
-                        all_external_items.extend(ingredients)
-
-            reminders = shopping_service.get_active_reminders()
-            all_shopping_items = all_external_items + reminders
-
-            # Show unified shopping list
-            if all_shopping_items:
-                text += "*🛒 Lista della Spesa:*\n"
-                for item in all_shopping_items:
+            # Add current shopping list
+            shopping_items = shopping_list_service.get_all_items()
+            if shopping_items:
+                text += "*🛒 Lista della Spesa Attiva:*\n"
+                for item in shopping_items:
                     text += f"  • {item}\n"
                 text += "\nPuoi aggiungere altri articoli con `/remember` o segnare come comprati con `/bought`\n"
             else:
