@@ -28,6 +28,18 @@
 - Tests use in-memory SQLite database for speed
 - Each test class groups related functionality
 
+### Regression testing (CRITICAL):
+**Every new feature must NOT break existing features.**
+- Before committing, manually test ALL user-facing commands
+- List of commands to test after ANY change:
+  - `/roll`, `/reroll`, `/set`, `/accept`
+  - `/remember`, `/bought`, `/history`
+  - `/add`, `/edit`, `/list`
+  - `/external`, `/noexternal`, `/skip`, `/fill_missing`
+- If a previously-working command breaks, this is a blocker
+- Root cause: changes to handlers, services, or models often have side effects
+- Prevention: when modifying core services/models, run full manual test pass
+
 ## Database
 
 ### Persistence guarantee:

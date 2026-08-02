@@ -12,26 +12,31 @@ async def set_number_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handle plain number input after /set command.
     Allows user to just type a number instead of /set <position> <number>.
+
+    IMPORTANT: This handler only processes if in an active /set flow.
+    It must be registered AFTER conversation handlers to avoid interfering with /add, /edit, etc.
     """
+    # Check if there's a pending selection state (only active during /set flow)
+    set_selection = context.user_data.get("set_selection", {})
+    if not set_selection:
+        # No pending selection, don't handle this message
+        # (allow other handlers to process it)
+        return
+
+    pending_menu_id = context.user_data.get("pending_menu_id")
+    if not pending_menu_id:
+        # No pending menu, don't handle
+        return
+
+    # Parse the message as a number
+    try:
+        number = int(update.message.text.strip())
+    except ValueError:
+        # Not a pure number, ignore
+        return
+
     session = get_session()
     try:
-        # Check if there's a pending selection state
-        set_selection = context.user_data.get("set_selection", {})
-        if not set_selection:
-            # No pending selection, ignore
-            return
-
-        pending_menu_id = context.user_data.get("pending_menu_id")
-        if not pending_menu_id:
-            # No pending menu, ignore
-            return
-
-        # Parse the message as a number
-        try:
-            number = int(update.message.text.strip())
-        except ValueError:
-            # Not a pure number, ignore
-            return
 
         position = set_selection.get("position")
         category_number = set_selection.get("category_number")

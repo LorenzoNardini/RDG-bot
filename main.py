@@ -114,12 +114,14 @@ def main():
     app.add_handler(CommandHandler("dbstatus", dbstatus))
     app.add_handler(CommandHandler("diagnose", diagnose_external))
 
-    # Register /set number input handler (must come before conversation handlers)
-    app.add_handler(get_set_number_handler())
-
-    # Register conversation handlers
+    # Register conversation handlers FIRST (must come before global message handlers)
+    # This ensures /add, /edit, and other conversations get priority over global handlers
     app.add_handler(get_add_handler())
     app.add_handler(get_edit_handler())
+
+    # Register /set number input handler AFTER conversation handlers
+    # The handler has guards to only process when in /set flow
+    app.add_handler(get_set_number_handler())
 
     # Start the bot
     logger.info("Starting bot...")
