@@ -68,7 +68,14 @@ async def set_number_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def get_set_number_handler():
-    """Return a MessageHandler for plain number input during /set flow."""
+    """Return a MessageHandler for plain number input during /set flow.
+
+    DEPRECATED: This handler is no longer registered globally to prevent
+    interference with other conversation handlers (/add, /edit, etc).
+
+    Users should use the full `/set position recipe_number` syntax instead.
+    This handler is kept for reference only.
+    """
     return MessageHandler(
         filters.TEXT & ~filters.COMMAND,
         set_number_input
