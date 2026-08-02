@@ -3,9 +3,8 @@ from telegram.ext import ContextTypes
 from app.database.db import get_session
 from app.services.menu_service import MenuService
 from app.services.external_service import ExternalIngredientService
-from app.services.shopping_service import ShoppingReminderService
 from app.services.shopping_list_service import ShoppingListService
-from app.utils.formatting import format_menu, format_enrichment_prompt, format_shopping_summary
+from app.utils.formatting import format_menu, format_enrichment_prompt
 
 
 async def accept(update: Update, context: ContextTypes.DEFAULT_TYPE):

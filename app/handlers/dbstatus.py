@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from app.database.db import get_session
-from app.models.models import Recipe, ExternalIngredient, ShoppingReminder
+from app.models.models import Recipe, ExternalIngredient, ShoppingListItem
 
 async def dbstatus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -19,8 +19,8 @@ async def dbstatus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Count external ingredients
         total_ingredients = session.query(ExternalIngredient).count()
 
-        # Count shopping reminders
-        total_reminders = session.query(ShoppingReminder).filter(ShoppingReminder.active == True).count()
+        # Count active shopping list items
+        shopping_items = session.query(ShoppingListItem).count()
 
         # Build status message
         msg = "🔍 *Database Status*\n\n"
@@ -31,8 +31,8 @@ async def dbstatus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg += f"  Status defined: {defined}\n\n"
         msg += f"*External Ingredients:*\n"
         msg += f"  Total records: {total_ingredients}\n\n"
-        msg += f"*Shopping Reminders:*\n"
-        msg += f"  Active: {total_reminders}\n"
+        msg += f"*Shopping List:*\n"
+        msg += f"  Active items: {shopping_items}\n"
 
         await update.message.reply_text(msg, parse_mode="Markdown")
 
